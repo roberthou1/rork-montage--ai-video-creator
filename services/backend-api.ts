@@ -6,10 +6,18 @@ import { JobStatus, MontageStyle, MusicMode, PhotoItem, TargetDuration } from '@
 import { resolvePhUri } from '@/services/video-cache';
 import { isSupabaseConfigured, supabase } from '@/services/supabase';
 
-const BACKEND_URL = (process.env.EXPO_PUBLIC_BACKEND_URL?.trim() ?? '').replace(/\/+$/, '');
+const CONFIGURED_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL?.trim() ?? '';
+const FALLBACK_BACKEND_URL = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim() ?? '';
+const BACKEND_URL = (CONFIGURED_BACKEND_URL || FALLBACK_BACKEND_URL).replace(/\/+$/, '');
+const BACKEND_URL_SOURCE = CONFIGURED_BACKEND_URL
+  ? 'EXPO_PUBLIC_BACKEND_URL'
+  : FALLBACK_BACKEND_URL
+    ? 'EXPO_PUBLIC_SUPABASE_URL'
+    : 'missing';
 const MEDIA_UPLOAD_BUCKET = 'media-uploads';
 const DOWNLOAD_DIR = `${FileSystem.documentDirectory || ''}montage/`;
 const FRIENDLY_BACKEND_ERROR = 'Could not reach the montage server. Please check your connection and try again.';
+const MISSING_API_ERROR = 'The montage API was not found at the configured server. Please verify the backend URL and try again.';
 
 export const isBackendConfigured = Boolean(BACKEND_URL);
 
@@ -58,7 +66,7 @@ function assertSupabaseConfigured(): void {
 
 function assertBackendConfigured(): void {
   if (!isBackendConfigured) {
-    console.warn('[BackendAPI] Missing EXPO_PUBLIC_BACKEND_URL');
+    console.warn('[BackendAPI] Missing backend URL. Set EXPO_PUBLIC_BACKEND_URL or reuse EXPO_PUBLIC_SUPABASE_URL if it proxies the montage API. DATABASE_URL is server-only and is not used by the Expo client.');
     throw new Error(FRIENDLY_BACKEND_ERROR);
   }
 }
@@ -107,9 +115,20 @@ function randomId(): string {
 
 function sanitizeBackendMessage(message?: string | null): string {
   const trimmed = message?.trim();
-  if (!trimmed || trimmed === 'Network request failed') {
+  const normalized = trimmed?.toLowerCase() ?? '';
+
+  if (!trimmed || normalized === 'network request failed' || normalized === 'failed to fetch') {
     return FRIENDLY_BACKEND_ERROR;
   }
+
+  if (normalized.startsWith('<!doctype') || normalized.startsWith('<html') || normalized.includes('<html')) {
+    return FRIENDLY_BACKEND_ERROR;
+  }
+
+  if (normalized.includes('not found') || normalized.includes('404')) {
+    return BACKEND_URL_SOURCE === 'EXPO_PUBLIC_SUPABASE_URL' ? MISSING_API_ERROR : FRIENDLY_BACKEND_ERROR;
+  }
+
   return trimmed;
 }
 
@@ -296,7 +315,7 @@ export async function uploadMediaToSupabase(uri: string, assetId: string): Promi
 export async function createMontageJob(params: CreateMontageJobParams): Promise<CreateMontageJobResult> {
   assertBackendConfigured();
 
-  console.log('[BackendAPI] Creating montage job:', params);
+  console.log('[BackendAPI] Creating montage job with backend source:', BACKEND_URL_SOURCE, params);
 
   try {
     const response = await fetch(buildBackendUrl('/api/montages'), {
@@ -346,7 +365,7 @@ export async function createMontageJob(params: CreateMontageJobParams): Promise<
 export async function pollJobStatus(jobId: string): Promise<JobStatus> {
   assertBackendConfigured();
 
-  console.log('[BackendAPI] Polling montage job:', jobId);
+  console.log('[BackendAPI] Polling montage job with backend source:', BACKEND_URL_SOURCE, jobId);
 
   try {
     const response = await fetch(buildBackendUrl(`/api/montages/${jobId}/status`), {
