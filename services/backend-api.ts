@@ -6,7 +6,7 @@ import { JobStatus, MontageStyle, MusicMode, PhotoItem, TargetDuration } from '@
 import { resolvePhUri } from '@/services/video-cache';
 import { isSupabaseConfigured, supabase } from '@/services/supabase';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? '';
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL?.trim() ?? '';
 const MEDIA_UPLOAD_BUCKET = 'media-uploads';
 const DOWNLOAD_DIR = `${FileSystem.documentDirectory || ''}montage/`;
 const FRIENDLY_BACKEND_ERROR = 'Could not reach the montage server. Please check your connection and try again.';
