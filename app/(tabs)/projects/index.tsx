@@ -40,7 +40,7 @@ function ProjectCard({ project, onPress, onDelete }: {
 
   const handleLongPress = () => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     Alert.alert(
       'Delete Project',
@@ -103,7 +103,7 @@ function EmptyState({ onCreatePress }: { onCreatePress: () => void }) {
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
-  }, []);
+  }, [fadeAnim]);
 
   return (
     <Animated.View style={[emptyStyles.container, { opacity: fadeAnim }]}>
@@ -132,21 +132,21 @@ export default function ProjectsScreen() {
 
   const handleProjectPress = useCallback((project: Project) => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     router.push({ pathname: '/preview', params: { projectId: project.id } });
-  }, []);
+  }, [router]);
 
   const handleDelete = useCallback((projectId: string) => {
     if (Platform.OS !== 'web') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
     deleteProject(projectId);
   }, [deleteProject]);
 
   const handleCreatePress = useCallback(() => {
     router.push('/(tabs)/(create)' as any);
-  }, []);
+  }, [router]);
 
   const renderItem = useCallback(({ item }: { item: Project }) => (
     <ProjectCard

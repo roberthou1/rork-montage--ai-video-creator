@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Animated,
-  Dimensions,
   Modal,
   TextInput,
   FlatList,
@@ -37,8 +36,6 @@ import Colors from '@/constants/colors';
 import { musicTracks } from '@/mocks/music';
 import { MusicTrack, MontageStyle, TargetDuration, MusicCategory } from '@/types';
 import { useApp } from '@/contexts/AppContext';
-
-const _width = Dimensions.get('window').width;
 
 const styleOptions: { id: MontageStyle; name: string; description: string; icon: React.ReactNode }[] = [
   { id: 'dynamic', name: 'Dynamic', description: 'Fast cuts, zoom transitions', icon: <Zap size={22} color="#F59E0B" strokeWidth={1.5} /> },

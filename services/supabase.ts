@@ -2,7 +2,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_KEY ?? '';
+const supabaseKeyName = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+  ? 'EXPO_PUBLIC_SUPABASE_ANON_KEY'
+  : process.env.EXPO_PUBLIC_SUPABASE_KEY
+    ? 'EXPO_PUBLIC_SUPABASE_KEY'
+    : 'EXPO_PUBLIC_SUPABASE_ANON_KEY';
 
 const authStorage = {
   getItem: async (key: string): Promise<string | null> => {
@@ -19,7 +24,7 @@ const authStorage = {
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
 if (!isSupabaseConfigured) {
-  console.warn('[Supabase] Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY');
+  console.warn(`[Supabase] Missing EXPO_PUBLIC_SUPABASE_URL or ${supabaseKeyName}`);
 }
 
 export const supabase = createClient(

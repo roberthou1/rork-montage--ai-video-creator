@@ -50,7 +50,7 @@ interface AssetMetadata {
 
 function assertSupabaseConfigured(): void {
   if (!isSupabaseConfigured) {
-    throw new Error('Supabase is not configured. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to continue.');
+    throw new Error('Supabase is not configured. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY or EXPO_PUBLIC_SUPABASE_KEY to continue.');
   }
 }
 
