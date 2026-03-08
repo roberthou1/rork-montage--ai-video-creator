@@ -189,11 +189,11 @@ export const [PhotoLibraryProvider, usePhotoLibrary] = createContextHook(() => {
       const result = await MediaLibrary.getAssetsAsync({
         first: PAGE_SIZE,
         after: reset ? undefined : endCursor,
-        mediaType: [MediaLibrary.MediaType.video],
+        mediaType: [MediaLibrary.MediaType.photo, MediaLibrary.MediaType.video],
         sortBy: [MediaLibrary.SortBy.creationTime],
       });
 
-      console.log('[PhotoLibrary] Fetched', result.assets.length, 'assets, total:', result.totalCount);
+      console.log('[PhotoLibrary] Fetched', result.assets.length, 'assets, total:', result.totalCount, 'including photos and videos');
 
       const items = result.assets.map((asset) => assetToPhotoItem({ ...asset, locationData: null } as AssetWithLocation));
 

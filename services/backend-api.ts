@@ -6,10 +6,12 @@ import { JobStatus, MontageStyle, MusicMode, PhotoItem, TargetDuration } from '@
 import { resolvePhUri } from '@/services/video-cache';
 import { isSupabaseConfigured, supabase } from '@/services/supabase';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL?.trim() ?? '';
+const BACKEND_URL = (process.env.EXPO_PUBLIC_BACKEND_URL?.trim() ?? '').replace(/\/+$/, '');
 const MEDIA_UPLOAD_BUCKET = 'media-uploads';
 const DOWNLOAD_DIR = `${FileSystem.documentDirectory || ''}montage/`;
 const FRIENDLY_BACKEND_ERROR = 'Could not reach the montage server. Please check your connection and try again.';
+
+export const isBackendConfigured = Boolean(BACKEND_URL);
 
 export interface UploadedMontageMedia {
   url: string;
@@ -55,9 +57,15 @@ function assertSupabaseConfigured(): void {
 }
 
 function assertBackendConfigured(): void {
-  if (!BACKEND_URL) {
+  if (!isBackendConfigured) {
+    console.warn('[BackendAPI] Missing EXPO_PUBLIC_BACKEND_URL');
     throw new Error(FRIENDLY_BACKEND_ERROR);
   }
+}
+
+function buildBackendUrl(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${BACKEND_URL}${normalizedPath}`;
 }
 
 function getMimeTypeFromExtension(extension: string, mediaType: PhotoItem['type']): string {
@@ -99,7 +107,31 @@ function randomId(): string {
 
 function sanitizeBackendMessage(message?: string | null): string {
   const trimmed = message?.trim();
-  return trimmed || FRIENDLY_BACKEND_ERROR;
+  if (!trimmed || trimmed === 'Network request failed') {
+    return FRIENDLY_BACKEND_ERROR;
+  }
+  return trimmed;
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  const contentType = response.headers.get('content-type') ?? '';
+
+  try {
+    if (contentType.includes('application/json')) {
+      const payload = (await response.json()) as {
+        error?: string;
+        message?: string;
+        detail?: string;
+      };
+      return sanitizeBackendMessage(payload.error ?? payload.message ?? payload.detail ?? null);
+    }
+
+    const text = await response.text();
+    return sanitizeBackendMessage(text);
+  } catch (error) {
+    console.error('[BackendAPI] Failed to parse error response:', error);
+    return FRIENDLY_BACKEND_ERROR;
+  }
 }
 
 function base64ToUint8Array(base64: string): Uint8Array {
@@ -267,7 +299,7 @@ export async function createMontageJob(params: CreateMontageJobParams): Promise<
   console.log('[BackendAPI] Creating montage job:', params);
 
   try {
-    const response = await fetch(`${BACKEND_URL}/api/montages`, {
+    const response = await fetch(buildBackendUrl('/api/montages'), {
       method: 'POST',
       headers: {
         Accept: 'application/json',
@@ -290,9 +322,9 @@ export async function createMontageJob(params: CreateMontageJobParams): Promise<
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[BackendAPI] Create job failed:', response.status, errorText);
-      throw new Error(sanitizeBackendMessage(errorText));
+      const errorMessage = await readErrorMessage(response);
+      console.error('[BackendAPI] Create job failed:', response.status, errorMessage);
+      throw new Error(errorMessage);
     }
 
     const data = (await response.json()) as MontageJobCreateResponse;
@@ -317,7 +349,7 @@ export async function pollJobStatus(jobId: string): Promise<JobStatus> {
   console.log('[BackendAPI] Polling montage job:', jobId);
 
   try {
-    const response = await fetch(`${BACKEND_URL}/api/montages/${jobId}/status`, {
+    const response = await fetch(buildBackendUrl(`/api/montages/${jobId}/status`), {
       method: 'GET',
       headers: {
         Accept: 'application/json',
@@ -325,9 +357,9 @@ export async function pollJobStatus(jobId: string): Promise<JobStatus> {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[BackendAPI] Poll job failed:', response.status, errorText);
-      throw new Error(sanitizeBackendMessage(errorText));
+      const errorMessage = await readErrorMessage(response);
+      console.error('[BackendAPI] Poll job failed:', response.status, errorMessage);
+      throw new Error(errorMessage);
     }
 
     const data = (await response.json()) as JobStatus;

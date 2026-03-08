@@ -225,7 +225,7 @@ export default function CreateScreen() {
                 </View>
               </View>
               <Text style={heroStyles.title}>Create a New Montage</Text>
-              <Text style={heroStyles.subtitle}>{"Select your video clips and we'll sync them to the beat"}</Text>
+              <Text style={heroStyles.subtitle}>{"Select your photos and videos and we'll turn them into a beat-synced montage"}</Text>
               <View style={heroStyles.ctaRow}>
                 <Text style={heroStyles.ctaText}>Get started</Text>
                 <ChevronRight size={18} color={Colors.dark.accent} />
@@ -287,7 +287,7 @@ export default function CreateScreen() {
             style={styles.browseButton}
           >
             <Grid3x3 size={20} color={Colors.dark.accent} strokeWidth={1.5} />
-            <Text style={styles.browseText}>Browse All Videos</Text>
+            <Text style={styles.browseText}>Browse All Media</Text>
             <ChevronRight size={18} color={Colors.dark.textTertiary} />
           </TouchableOpacity>
 
@@ -299,7 +299,7 @@ export default function CreateScreen() {
               <Text style={styles.tipEmoji}>💡</Text>
               <View style={styles.tipTextContainer}>
                 <Text style={styles.tipTitle}>Pro tip</Text>
-                <Text style={styles.tipBody}>{"4-10 video clips usually creates the best montage. Choose clips with good moments and we'll sync the cuts to your music's rhythm."}</Text>
+                <Text style={styles.tipBody}>{"4-10 items usually creates the best montage. Mix standout photos and short clips, and we'll sync the edit to your music's rhythm."}</Text>
               </View>
             </LinearGradient>
           </View>

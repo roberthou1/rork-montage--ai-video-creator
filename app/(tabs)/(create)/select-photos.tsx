@@ -178,7 +178,7 @@ export default function SelectPhotosScreen() {
 
       {showWarning && (
         <View style={styles.warningBanner}>
-          <Text style={styles.warningText}>💡 Pro tip: 4-10 clips usually makes the best montage</Text>
+          <Text style={styles.warningText}>💡 Pro tip: 4-10 items usually makes the best montage</Text>
         </View>
       )}
 
