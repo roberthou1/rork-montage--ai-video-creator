@@ -17,6 +17,8 @@ export type TargetDuration = 15 | 30 | 60;
 
 export type ExportQuality = '720p' | '1080p' | '4k';
 
+export type MusicMode = 'preset' | 'ai-generated' | 'none';
+
 export interface PhotoItem {
   id: string;
   uri: string;
@@ -34,11 +36,24 @@ export interface SmartCollection {
   photos: PhotoItem[];
 }
 
-export interface BeatSyncData {
-  bpm: number;
-  beatIntervalMs: number;
-  clipTimings: { clipIndex: number; startMs: number; durationMs: number }[];
-  totalDurationMs: number;
+export type BackendJobState =
+  | 'queued'
+  | 'uploading_media'
+  | 'submitting'
+  | 'generating_music'
+  | 'analyzing_beats'
+  | 'generating_ai_clips'
+  | 'compositing'
+  | 'encoding'
+  | 'complete'
+  | 'failed';
+
+export interface JobStatus {
+  status: BackendJobState;
+  progress: number;
+  current_step: string;
+  result_url: string | null;
+  error?: string | null;
 }
 
 export interface Project {
@@ -52,13 +67,10 @@ export interface Project {
   status: 'complete' | 'failed';
   thumbnailUri: string;
   mediaCount: number;
-  enhancedImageUris?: string[];
-  originalImageUris?: string[];
-  videoClipUris?: string[];
-  localVideoUris?: string[];
+  localVideoPath?: string;
+  backendJobId?: string;
   generatedMusicUrl?: string;
-  musicMode?: 'preset' | 'ai-generated' | 'none';
-  beatSyncData?: BeatSyncData;
+  musicMode?: MusicMode;
 }
 
 export interface AppSettings {
@@ -68,12 +80,11 @@ export interface AppSettings {
   hasCompletedOnboarding: boolean;
 }
 
-export type JobStatus = 'queued' | 'analyzing' | 'generating_ai_clips' | 'compositing' | 'finalizing' | 'complete' | 'failed';
-
 export interface GenerationJob {
   jobId: string;
-  status: JobStatus;
+  status: BackendJobState;
   progress: number;
   currentStep: string;
-  resultUrl?: string;
+  resultUrl?: string | null;
+  error?: string | null;
 }

@@ -11,6 +11,7 @@ import {
   TextInput,
   FlatList,
   Platform,
+  Switch,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
@@ -257,6 +258,7 @@ export default function EditorSetupScreen() {
   const [style, setStyle] = useState<MontageStyle>(settings.defaultStyle);
   const [duration, setDuration] = useState<TargetDuration>(30);
   const [musicBrowserVisible, setMusicBrowserVisible] = useState<boolean>(false);
+  const [aiEnhance, setAiEnhance] = useState<boolean>(settings.aiEnhancementDefault);
   const buttonScale = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -279,7 +281,7 @@ export default function EditorSetupScreen() {
         params: {
           style,
           duration: String(duration),
-          aiEnhance: 'false',
+          aiEnhance: String(aiEnhance),
           musicTrackId: selectedTrack?.id ?? '',
           musicTrackName: selectedTrack?.name ?? '',
           musicBpm: selectedTrack ? String(selectedTrack.bpm) : '',
@@ -290,7 +292,7 @@ export default function EditorSetupScreen() {
         },
       });
     });
-  }, [style, duration, selectedTrack, photoCount, musicMode, params.selectedIds, router, buttonScale]);
+  }, [style, duration, selectedTrack, photoCount, musicMode, aiEnhance, params.selectedIds, router, buttonScale]);
 
   return (
     <View style={styles.container}>
@@ -308,7 +310,7 @@ export default function EditorSetupScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.photoCountBanner}>
-          <Text style={styles.photoCountText}>{photoCount} video clips selected</Text>
+          <Text style={styles.photoCountText}>{photoCount} items selected</Text>
         </View>
 
         <Text style={styles.sectionLabel}>MUSIC</Text>
@@ -366,7 +368,7 @@ export default function EditorSetupScreen() {
           <View style={styles.aiMusicNote}>
             <Wand2 size={14} color={Colors.dark.secondary} />
             <Text style={styles.aiMusicNoteText}>
-              AI will generate a unique {style} soundtrack matched to your montage (~10s)
+              AI will generate a unique {style} soundtrack as part of your montage
             </Text>
           </View>
         )}
@@ -456,6 +458,32 @@ export default function EditorSetupScreen() {
           })}
         </View>
         <Text style={styles.durationNote}>Clips will be trimmed and synced to fit your target duration</Text>
+
+        <Text style={styles.sectionLabel}>PHOTO MOTION</Text>
+        <View style={styles.aiCard}>
+          <View style={styles.aiCardLeft}>
+            <Wand2 size={20} color={Colors.dark.accent} strokeWidth={1.5} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.aiTitle}>Bring photos to life with AI</Text>
+            <Text style={styles.aiSubtitle}>
+              {aiEnhance
+                ? 'Uses AI to add subtle motion to still photos — gentle parallax, slow zooms, and natural movement. Takes ~2-3 min.'
+                : 'Still photos will use a smooth Ken Burns pan-and-zoom effect (instant, no AI needed)'}
+            </Text>
+          </View>
+          <Switch
+            value={aiEnhance}
+            onValueChange={(value) => {
+              if (Platform.OS !== 'web') {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }
+              setAiEnhance(value);
+            }}
+            trackColor={{ false: Colors.dark.surfaceLight, true: Colors.dark.accentDark }}
+            thumbColor={aiEnhance ? Colors.dark.accent : Colors.dark.textTertiary}
+          />
+        </View>
 
         <Text style={styles.sectionLabel}>BEAT SYNC</Text>
         <View style={styles.aiCard}>

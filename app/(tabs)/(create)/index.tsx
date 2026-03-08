@@ -15,7 +15,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { Sparkles, Heart, Calendar, MapPin, Star, Grid3x3, ChevronRight, ShieldAlert, ImageIcon, Video, Clock } from 'lucide-react-native';
+import { Sparkles, Heart, Calendar, MapPin, Star, Grid3x3, ChevronRight, ImageIcon, Video, Clock } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { usePhotoLibrary } from '@/contexts/PhotoLibraryContext';
 import { SmartCollection } from '@/types';
@@ -36,7 +36,7 @@ function GradientBorderCard() {
     );
     loop.start();
     return () => loop.stop();
-  }, []);
+  }, [rotateAnim]);
 
   const rotate = rotateAnim.interpolate({
     inputRange: [0, 1],
@@ -139,61 +139,61 @@ export default function CreateScreen() {
       duration: 600,
       useNativeDriver: true,
     }).start();
-  }, []);
+  }, [fadeAnim]);
 
   useEffect(() => {
     if (permissionStatus === 'granted' || permissionStatus === 'limited') {
       if (photos.length === 0) {
-        loadInitialPhotos();
+        void loadInitialPhotos();
       }
     }
-  }, [permissionStatus]);
+  }, [loadInitialPhotos, permissionStatus, photos.length]);
 
   const handleRequestPermission = useCallback(async () => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     const result = await requestPermission();
     if (result === 'granted' || result === 'limited') {
       await loadInitialPhotos();
     } else if (result === 'denied') {
       if (Platform.OS !== 'web') {
-        Linking.openSettings();
+        void Linking.openSettings();
       }
     }
-  }, [requestPermission, loadInitialPhotos]);
+  }, [loadInitialPhotos, requestPermission]);
 
   const handleCollectionPress = useCallback((collection: SmartCollection) => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     router.push({
       pathname: '/editor-setup',
       params: { collectionId: collection.id, collectionName: collection.name },
     });
-  }, []);
+  }, [router]);
 
   const handleBrowseAll = useCallback(async () => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     if (permissionStatus === 'denied' || permissionStatus === 'undetermined') {
       await handleRequestPermission();
       return;
     }
     router.push('/select-photos');
-  }, [permissionStatus, handleRequestPermission]);
+  }, [handleRequestPermission, permissionStatus, router]);
 
   const handleHeroPress = useCallback(async () => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     if (permissionStatus === 'denied' || permissionStatus === 'undetermined') {
       await handleRequestPermission();
       return;
     }
     router.push('/select-photos');
-  }, [permissionStatus, handleRequestPermission]);
+  }, [handleRequestPermission, permissionStatus, router]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -225,7 +225,7 @@ export default function CreateScreen() {
                 </View>
               </View>
               <Text style={heroStyles.title}>Create a New Montage</Text>
-              <Text style={heroStyles.subtitle}>Select your video clips and we'll sync them to the beat</Text>
+              <Text style={heroStyles.subtitle}>{"Select your video clips and we'll sync them to the beat"}</Text>
               <View style={heroStyles.ctaRow}>
                 <Text style={heroStyles.ctaText}>Get started</Text>
                 <ChevronRight size={18} color={Colors.dark.accent} />
@@ -299,7 +299,7 @@ export default function CreateScreen() {
               <Text style={styles.tipEmoji}>💡</Text>
               <View style={styles.tipTextContainer}>
                 <Text style={styles.tipTitle}>Pro tip</Text>
-                <Text style={styles.tipBody}>4-10 video clips usually creates the best montage. Choose clips with good moments and we'll sync the cuts to your music's rhythm.</Text>
+                <Text style={styles.tipBody}>{"4-10 video clips usually creates the best montage. Choose clips with good moments and we'll sync the cuts to your music's rhythm."}</Text>
               </View>
             </LinearGradient>
           </View>

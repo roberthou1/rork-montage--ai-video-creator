@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
-  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
@@ -17,23 +16,68 @@ import { X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
 import { usePhotoLibrary } from '@/contexts/PhotoLibraryContext';
-import { Project, MontageStyle, TargetDuration, BeatSyncData } from '@/types';
-import { generateMusic } from '@/services/fal-music';
-import { analyzeMusicTrack, generateClipTimings } from '@/services/beat-analysis';
-import { analyzeClips, assignClipSegments } from '@/services/clip-analysis';
-import { resolveAllUris } from '@/services/video-cache';
+import { MontageStyle, MusicMode, PhotoItem, Project, TargetDuration } from '@/types';
+import {
+  createMontageJob,
+  downloadVideo,
+  FRIENDLY_BACKEND_ERROR,
+  pollJobStatus,
+  uploadMediaToSupabase,
+} from '@/services/backend-api';
 
-const _screen = Dimensions.get('window');
+type GenerationStepKey =
+  | 'uploading'
+  | 'starting'
+  | 'generating_music'
+  | 'analyzing_beats'
+  | 'generating_ai_clips'
+  | 'compositing'
+  | 'encoding'
+  | 'downloading'
+  | 'complete'
+  | 'error';
 
-const stepLabels: Record<string, { label: string; sublabel: string }> = {
-  analyzing: { label: 'Analyzing your clips...', sublabel: 'Finding the best moments in each clip' },
-  music: { label: 'Composing your soundtrack...', sublabel: 'AI is creating custom music' },
-  'beat-analysis': { label: 'Analyzing the beat...', sublabel: 'Mapping rhythm and energy patterns' },
-  syncing: { label: 'Syncing to the beat...', sublabel: 'Aligning clip cuts with the rhythm' },
-  optimizing: { label: 'Selecting best moments...', sublabel: 'Choosing the most engaging parts' },
-  finalizing: { label: 'Adding finishing touches...', sublabel: 'Polishing your masterpiece' },
-  complete: { label: 'Your montage is ready!', sublabel: 'Looking great' },
-  error: { label: 'Something went wrong', sublabel: 'Please try again' },
+const stepLabels: Record<GenerationStepKey, { label: string; sublabel: string }> = {
+  uploading: {
+    label: 'Uploading your photos and videos...',
+    sublabel: 'Preparing your media for the montage server',
+  },
+  starting: {
+    label: 'Starting montage creation...',
+    sublabel: 'Sending your edit settings to the server',
+  },
+  generating_music: {
+    label: 'Composing your soundtrack...',
+    sublabel: 'Building a score that fits your montage',
+  },
+  analyzing_beats: {
+    label: 'Analyzing the beat...',
+    sublabel: 'Finding the best rhythm for each cut',
+  },
+  generating_ai_clips: {
+    label: 'Bringing photos to life with AI...',
+    sublabel: 'Animating your stills with subtle movement',
+  },
+  compositing: {
+    label: 'Compositing your montage...',
+    sublabel: 'Blending clips, timing, and motion together',
+  },
+  encoding: {
+    label: 'Encoding for iPhone...',
+    sublabel: 'Finalizing a smooth playback file',
+  },
+  downloading: {
+    label: 'Downloading your montage...',
+    sublabel: 'Saving the finished MP4 to your device',
+  },
+  complete: {
+    label: 'Your montage is ready!',
+    sublabel: 'Opening preview',
+  },
+  error: {
+    label: 'Something went wrong',
+    sublabel: 'Please try again',
+  },
 };
 
 function CircularProgress({ progress }: { progress: number }) {
@@ -67,7 +111,10 @@ function CircularProgress({ progress }: { progress: number }) {
     );
     rotate.start();
     pulse.start();
-    return () => { rotate.stop(); pulse.stop(); };
+    return () => {
+      rotate.stop();
+      pulse.stop();
+    };
   }, [pulseAnim, rotateAnim]);
 
   const rotation = rotateAnim.interpolate({
@@ -76,8 +123,8 @@ function CircularProgress({ progress }: { progress: number }) {
   });
 
   return (
-    <Animated.View style={[progressStyles.container, { transform: [{ scale: pulseAnim }] }]}>
-      <Animated.View style={[progressStyles.glowRing, { transform: [{ rotate: rotation }] }]}>
+    <Animated.View style={[progressStyles.container, { transform: [{ scale: pulseAnim }] }]} testID="generation-progress-ring">
+      <Animated.View style={[progressStyles.glowRing, { transform: [{ rotate: rotation }] }]}> 
         <LinearGradient
           colors={[Colors.dark.accent, Colors.dark.secondary, Colors.dark.accent]}
           start={{ x: 0, y: 0 }}
@@ -103,41 +150,42 @@ function SparkleAnimation() {
   ).current;
 
   useEffect(() => {
-    const animations = sparkles.map((s, i) =>
+    const animations = sparkles.map((sparkle, index) =>
       Animated.loop(
         Animated.sequence([
-          Animated.delay(i * 400),
+          Animated.delay(index * 400),
           Animated.parallel([
-            Animated.timing(s.opacity, { toValue: 1, duration: 400, useNativeDriver: true }),
-            Animated.spring(s.scale, { toValue: 1, friction: 3, useNativeDriver: true }),
+            Animated.timing(sparkle.opacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+            Animated.spring(sparkle.scale, { toValue: 1, friction: 3, useNativeDriver: true }),
           ]),
           Animated.delay(300),
           Animated.parallel([
-            Animated.timing(s.opacity, { toValue: 0, duration: 400, useNativeDriver: true }),
-            Animated.timing(s.scale, { toValue: 0, duration: 400, useNativeDriver: true }),
+            Animated.timing(sparkle.opacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+            Animated.timing(sparkle.scale, { toValue: 0, duration: 400, useNativeDriver: true }),
           ]),
           Animated.delay(800),
         ])
       )
     );
-    animations.forEach(a => a.start());
-    return () => animations.forEach(a => a.stop());
+
+    animations.forEach((animation) => animation.start());
+    return () => animations.forEach((animation) => animation.stop());
   }, [sparkles]);
 
   return (
-    <View style={sparkleStyles.container}>
-      {sparkles.map((s, i) => (
+    <View style={sparkleStyles.container} pointerEvents="none">
+      {sparkles.map((sparkle, index) => (
         <Animated.View
-          key={i}
+          key={index}
           style={[
             sparkleStyles.sparkle,
             {
               transform: [
-                { translateX: s.x },
-                { translateY: s.y },
-                { scale: s.scale },
+                { translateX: sparkle.x },
+                { translateY: sparkle.y },
+                { scale: sparkle.scale },
               ],
-              opacity: s.opacity,
+              opacity: sparkle.opacity,
             },
           ]}
         >
@@ -146,6 +194,27 @@ function SparkleAnimation() {
       ))}
     </View>
   );
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
+function clampProgress(value: number): number {
+  return Math.max(0, Math.min(100, value));
+}
+
+function mapBackendStepToUiStep(status: string): GenerationStepKey {
+  if (status === 'generating_music') return 'generating_music';
+  if (status === 'analyzing_beats') return 'analyzing_beats';
+  if (status === 'generating_ai_clips') return 'generating_ai_clips';
+  if (status === 'compositing') return 'compositing';
+  if (status === 'encoding') return 'encoding';
+  if (status === 'complete') return 'complete';
+  if (status === 'failed') return 'error';
+  return 'starting';
 }
 
 export default function GenerationScreen() {
@@ -165,14 +234,14 @@ export default function GenerationScreen() {
   const { addProject } = useApp();
   const { photos } = usePhotoLibrary();
 
-  const [currentStep, setCurrentStep] = useState<string>('analyzing');
+  const [currentStep, setCurrentStep] = useState<GenerationStepKey>('uploading');
   const [progress, setProgress] = useState<number>(0);
   const [statusDetail, setStatusDetail] = useState<string>('');
+  const [retryNonce, setRetryNonce] = useState<number>(0);
   const stepOpacity = useRef(new Animated.Value(1)).current;
-  const abortRef = useRef({ aborted: false });
-  const hasStarted = useRef(false);
+  const abortRef = useRef<{ aborted: boolean }>({ aborted: false });
 
-  const animateStepChange = useCallback((newStep: string) => {
+  const animateStepChange = useCallback((newStep: GenerationStepKey) => {
     Animated.sequence([
       Animated.timing(stepOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
       Animated.timing(stepOpacity, { toValue: 1, duration: 150, useNativeDriver: true }),
@@ -180,228 +249,199 @@ export default function GenerationScreen() {
     setCurrentStep(newStep);
   }, [stepOpacity]);
 
-  const getSelectedVideos = useCallback(() => {
+  const getSelectedMedia = useCallback((): PhotoItem[] => {
     const selectedIds = params.selectedIds ? params.selectedIds.split(',').filter(Boolean) : [];
+    const fallbackCount = Number(params.photoCount) || 8;
+
     if (selectedIds.length === 0) {
-      return photos.filter(p => p.type === 'video').slice(0, Number(params.photoCount) || 8);
+      return photos.slice(0, fallbackCount);
     }
 
     const photoMap = new Map(photos.map((photo) => [photo.id, photo]));
     const orderedSelected = selectedIds
       .map((id) => photoMap.get(id))
-      .filter((item): item is (typeof photos)[number] => Boolean(item));
+      .filter((item): item is PhotoItem => Boolean(item));
 
-    if (orderedSelected.length === 0) {
-      return photos.filter(p => p.type === 'video').slice(0, Number(params.photoCount) || 8);
+    if (orderedSelected.length > 0) {
+      return orderedSelected;
     }
 
-    return orderedSelected;
-  }, [params.selectedIds, params.photoCount, photos]);
+    return photos.slice(0, fallbackCount);
+  }, [params.photoCount, params.selectedIds, photos]);
 
   useEffect(() => {
-    if (hasStarted.current) return;
-    hasStarted.current = true;
+    abortRef.current = { aborted: false };
 
     const runGeneration = async () => {
+      const selectedMedia = getSelectedMedia();
       const style = (params.style as MontageStyle) || 'dynamic';
-      const musicMode = (params.musicMode as 'preset' | 'ai-generated' | 'none') || 'none';
-      const targetDuration = Number(params.duration) || 30;
-      const musicBpm = Number(params.musicBpm) || 0;
-      const musicUrl = params.musicUrl || '';
+      const duration = (Number(params.duration) || 30) as TargetDuration;
+      const aiEnhance = params.aiEnhance === 'true';
+      const musicMode: MusicMode =
+        params.musicMode === 'preset' || params.musicMode === 'ai-generated'
+          ? params.musicMode
+          : 'none';
+      const musicBpm = params.musicBpm ? Number(params.musicBpm) : null;
+      const normalizedMusicBpm = Number.isFinite(musicBpm) ? musicBpm : null;
+      const musicUrl = params.musicUrl || null;
       const projectId = `p-${Date.now()}`;
-      const selectedVideos = getSelectedVideos();
 
-      console.log('[Generation] Starting with', selectedVideos.length, 'video clips, style:', style, 'musicMode:', musicMode);
-      console.log('[Generation] Music URL:', musicUrl?.substring(0, 80), 'BPM:', musicBpm);
+      console.log('[Generation] Starting backend montage generation', {
+        projectId,
+        selectedCount: selectedMedia.length,
+        style,
+        duration,
+        aiEnhance,
+        musicMode,
+        musicBpm: normalizedMusicBpm,
+        musicUrl,
+      });
 
       try {
-        animateStepChange('analyzing');
-        setProgress(3);
-        setStatusDetail(`Preparing ${selectedVideos.length} video clips...`);
+        if (selectedMedia.length === 0) {
+          throw new Error('Please select at least one photo or video to create a montage.');
+        }
 
-        if (abortRef.current.aborted) return;
+        animateStepChange('uploading');
+        setProgress(0);
+        setStatusDetail(`Uploading 0 of ${selectedMedia.length}...`);
 
-        const rawUris = selectedVideos.map((item) => item.uri);
-        const clipDurations = selectedVideos.map((item) => (item.duration || 5) * 1000);
+        const uploadedMediaItems: { url: string; type: PhotoItem['type']; duration: number | null }[] = [];
 
-        setProgress(4);
-        setStatusDetail('Resolving video files...');
-
-        const videoUris = await resolveAllUris(rawUris, (done, total) => {
-          if (abortRef.current.aborted) return;
-          setStatusDetail(`Preparing clip ${done}/${total}...`);
-        });
-
-        console.log('[Generation] Resolved URIs:', videoUris.map(u => u.substring(0, 60)));
-
-        if (abortRef.current.aborted) return;
-
-        setProgress(5);
-        setStatusDetail(`Analyzing ${selectedVideos.length} clips for best moments...`);
-
-        const analyzedClips = await analyzeClips(
-          videoUris,
-          clipDurations,
-          (p, msg) => {
-            if (abortRef.current.aborted) return;
-            setProgress(5 + (p / 100) * 10);
-            setStatusDetail(msg);
-          },
-        );
-
-        console.log('[Generation] Clip analysis complete:', analyzedClips.length, 'clips analyzed');
-
-        if (abortRef.current.aborted) return;
-
-        let generatedMusicUrl: string | undefined;
-        let finalBpm = musicBpm;
-        let finalMusicUrl = musicUrl;
-
-        if (musicMode === 'ai-generated') {
-          animateStepChange('music');
-          setStatusDetail('');
-          setProgress(18);
-
-          try {
-            generatedMusicUrl = await generateMusic(
-              style,
-              targetDuration,
-              (mp) => {
-                if (abortRef.current.aborted) return;
-                setProgress(18 + (mp.progress / 100) * 25);
-                setStatusDetail(mp.statusMessage);
-              },
-              abortRef.current,
-            );
-            console.log('[Generation] Music generated:', generatedMusicUrl?.substring(0, 80));
-            finalMusicUrl = generatedMusicUrl || '';
-
-            const styleBpmMap: Record<MontageStyle, number> = {
-              dynamic: 128,
-              cinematic: 80,
-              energetic: 140,
-              dreamy: 85,
-            };
-            finalBpm = styleBpmMap[style];
-          } catch (error: any) {
-            if (error?.message === 'Generation cancelled') return;
-            console.error('[Generation] Music generation failed:', error?.message);
-            setStatusDetail('Music generation failed, continuing without music...');
-            await new Promise(resolve => setTimeout(resolve, 1000));
+        for (let index = 0; index < selectedMedia.length; index += 1) {
+          if (abortRef.current.aborted) {
+            return;
           }
 
-          if (abortRef.current.aborted) return;
-        } else if (musicMode === 'preset' && musicUrl) {
-          finalMusicUrl = musicUrl;
-          generatedMusicUrl = musicUrl;
+          const mediaItem = selectedMedia[index];
+          setStatusDetail(`Uploading ${index + 1} of ${selectedMedia.length}...`);
+
+          let uploadUrl: string | null = null;
+          let lastError: unknown = null;
+
+          for (let attempt = 0; attempt < 3; attempt += 1) {
+            try {
+              console.log('[Generation] Upload attempt', attempt + 1, 'for media', mediaItem.id);
+              uploadUrl = await uploadMediaToSupabase(mediaItem.uri, mediaItem.id);
+              break;
+            } catch (error) {
+              lastError = error;
+              console.error('[Generation] Upload failed for media', mediaItem.id, 'attempt', attempt + 1, error);
+              if (attempt < 2) {
+                await delay(600);
+              }
+            }
+          }
+
+          if (!uploadUrl) {
+            const uploadErrorMessage = lastError instanceof Error ? lastError.message : 'Failed to upload media.';
+            throw new Error(uploadErrorMessage);
+          }
+
+          uploadedMediaItems.push({
+            url: uploadUrl,
+            type: mediaItem.type,
+            duration: mediaItem.type === 'video' ? mediaItem.duration ?? null : null,
+          });
+
+          const uploadProgress = ((index + 1) / selectedMedia.length) * 30;
+          setProgress(clampProgress(uploadProgress));
+          console.log('[Generation] Upload complete for media', mediaItem.id, 'progress:', uploadProgress);
         }
 
-        if (finalBpm <= 0) {
-          finalBpm = style === 'energetic' ? 140 : style === 'cinematic' ? 80 : style === 'dreamy' ? 85 : 120;
-          console.log('[Generation] No BPM provided, using default for style:', finalBpm);
+        if (abortRef.current.aborted) {
+          return;
         }
 
-        const beatAnalysisStart = musicMode === 'ai-generated' ? 45 : 18;
-        animateStepChange('beat-analysis');
-        setProgress(beatAnalysisStart);
-        setStatusDetail(`Analyzing ${finalBpm} BPM rhythm pattern...`);
+        animateStepChange('starting');
+        setProgress(32);
+        setStatusDetail('Starting montage creation...');
 
-        if (abortRef.current.aborted) return;
-
-        const beatMap = await analyzeMusicTrack(
-          finalMusicUrl,
-          finalBpm,
-          targetDuration,
-          (p, msg) => {
-            if (abortRef.current.aborted) return;
-            setProgress(beatAnalysisStart + (p / 100) * 20);
-            setStatusDetail(msg);
-          },
-        );
-
-        console.log('[Generation] Beat analysis complete:', beatMap.beats.length, 'beats,', beatMap.sections.length, 'sections');
-
-        if (abortRef.current.aborted) return;
-
-        const syncStart = beatAnalysisStart + 22;
-        animateStepChange('syncing');
-        setProgress(syncStart);
-        setStatusDetail('Generating beat-synced clip timeline...');
-
-        const clipTimings = generateClipTimings(
-          beatMap,
-          selectedVideos.length,
-          targetDuration * 1000,
+        const job = await createMontageJob({
+          mediaItems: uploadedMediaItems,
+          musicMode,
+          musicTrackUrl: musicMode === 'preset' ? musicUrl : null,
+          musicBpm: musicMode === 'preset' ? normalizedMusicBpm : null,
           style,
-        );
+          targetDuration: duration,
+          aiEnhance,
+        });
 
-        console.log('[Generation] Generated', clipTimings.length, 'clip timings');
-        setProgress(syncStart + 8);
+        console.log('[Generation] Backend job created:', job);
+        setProgress(35);
+        setStatusDetail(`Job started. Estimated time: ${job.estimatedSeconds}s`);
 
-        if (abortRef.current.aborted) return;
+        let finalResultUrl: string | null = null;
 
-        animateStepChange('optimizing');
-        setStatusDetail('Assigning best clip segments to timeline...');
-        setProgress(syncStart + 12);
+        while (!abortRef.current.aborted) {
+          const status = await pollJobStatus(job.jobId);
+          const mappedStep = mapBackendStepToUiStep(status.status);
+          const mappedProgress = 35 + (clampProgress(status.progress) / 100) * 60;
 
-        const optimizedTimings = assignClipSegments(analyzedClips, clipTimings);
+          animateStepChange(mappedStep);
+          setProgress(clampProgress(mappedProgress));
+          setStatusDetail(status.current_step || stepLabels[mappedStep].sublabel);
 
-        console.log('[Generation] Optimized timings with best segments');
-        setProgress(syncStart + 18);
-        setStatusDetail(`${optimizedTimings.length} cuts synced to beat with best moments`);
-        await new Promise(resolve => setTimeout(resolve, 400));
+          console.log('[Generation] Polled backend status:', status.status, mappedProgress, status.current_step);
 
-        if (abortRef.current.aborted) return;
+          if (status.status === 'failed') {
+            throw new Error(status.error || status.current_step || 'Montage generation failed.');
+          }
 
-        animateStepChange('finalizing');
-        setStatusDetail('Almost done...');
-        setProgress(92);
-        await new Promise(resolve => setTimeout(resolve, 500));
+          if (status.status === 'complete') {
+            finalResultUrl = status.result_url;
+            break;
+          }
 
-        if (abortRef.current.aborted) return;
+          await delay(2000);
+        }
+
+        if (abortRef.current.aborted) {
+          return;
+        }
+
+        if (!finalResultUrl) {
+          throw new Error('The montage finished without a downloadable video URL.');
+        }
+
+        animateStepChange('downloading');
+        setProgress(95);
+        setStatusDetail('Downloading your montage...');
+
+        const localVideoPath = await downloadVideo(finalResultUrl);
+
+        if (abortRef.current.aborted) {
+          return;
+        }
 
         setProgress(100);
         animateStepChange('complete');
+        setStatusDetail('Opening preview...');
 
         if (Platform.OS !== 'web') {
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
 
-        const thumbnailUri = videoUris[0] || 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=600&fit=crop';
-
-        const beatSyncData: BeatSyncData = {
-          bpm: beatMap.bpm,
-          beatIntervalMs: beatMap.beatIntervalMs,
-          clipTimings: optimizedTimings.map(t => ({
-            clipIndex: t.clipIndex,
-            startMs: t.startMs,
-            durationMs: t.durationMs,
-          })),
-          totalDurationMs: beatMap.totalDurationMs,
-        };
-
+        const thumbnailUri = selectedMedia[0]?.uri || 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=600&fit=crop';
         const newProject: Project = {
           id: projectId,
           createdAt: new Date().toISOString(),
           musicTrackId: params.musicTrackId || null,
-          musicTrackName: musicMode === 'ai-generated' ? 'AI Generated' : (params.musicTrackName || null),
+          musicTrackName: musicMode === 'ai-generated' ? 'AI Generated' : params.musicTrackName || null,
           style,
-          duration: (targetDuration as TargetDuration) || 30,
-          aiEnhanced: false,
+          duration,
+          aiEnhanced: aiEnhance,
           status: 'complete',
           thumbnailUri,
-          mediaCount: selectedVideos.length,
-          originalImageUris: videoUris,
-          videoClipUris: videoUris,
-          localVideoUris: videoUris,
-          generatedMusicUrl: generatedMusicUrl || finalMusicUrl || undefined,
+          mediaCount: selectedMedia.length,
+          localVideoPath,
+          backendJobId: job.jobId,
+          generatedMusicUrl: musicMode === 'preset' ? musicUrl ?? undefined : undefined,
           musicMode,
-          beatSyncData,
         };
 
+        console.log('[Generation] Saving completed project:', newProject);
         addProject(newProject);
-        console.log('[Generation] Project created:', projectId, 'with', videoUris.length, 'video clips, BPM:', finalBpm);
-        console.log('[Generation] Music URL saved:', (generatedMusicUrl || finalMusicUrl || 'none').substring(0, 80));
 
         setTimeout(() => {
           if (!abortRef.current.aborted) {
@@ -410,16 +450,23 @@ export default function GenerationScreen() {
               params: { projectId: newProject.id },
             });
           }
-        }, 800);
-
-      } catch (error: any) {
-        if (error?.message === 'Generation cancelled') {
-          console.log('[Generation] Cancelled by user');
+        }, 600);
+      } catch (error) {
+        if (abortRef.current.aborted) {
+          console.log('[Generation] Generation aborted by user');
           return;
         }
-        console.error('[Generation] Error:', error);
+
+        console.error('[Generation] Backend montage generation failed:', error);
         animateStepChange('error');
-        setStatusDetail(error?.message || 'An unexpected error occurred');
+
+        const message = error instanceof Error ? error.message : FRIENDLY_BACKEND_ERROR;
+        if (!message || message.includes('Network request failed')) {
+          setStatusDetail(FRIENDLY_BACKEND_ERROR);
+          return;
+        }
+
+        setStatusDetail(message);
       }
     };
 
@@ -428,10 +475,23 @@ export default function GenerationScreen() {
     return () => {
       abortRef.current.aborted = true;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [
+    addProject,
+    animateStepChange,
+    getSelectedMedia,
+    params.aiEnhance,
+    params.duration,
+    params.musicBpm,
+    params.musicMode,
+    params.musicTrackId,
+    params.musicTrackName,
+    params.musicUrl,
+    params.style,
+    retryNonce,
+    router,
+  ]);
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     Alert.alert(
       'Cancel Generation',
       'Are you sure? Your montage progress will be lost.',
@@ -447,20 +507,20 @@ export default function GenerationScreen() {
         },
       ]
     );
-  };
+  }, [router]);
 
-  const handleRetry = () => {
-    abortRef.current = { aborted: false };
-    hasStarted.current = false;
+  const handleRetry = useCallback(() => {
+    abortRef.current.aborted = true;
     setProgress(0);
-    setCurrentStep('analyzing');
     setStatusDetail('');
-  };
+    setCurrentStep('uploading');
+    setRetryNonce((previous) => previous + 1);
+  }, []);
 
-  const step = stepLabels[currentStep] || stepLabels.analyzing;
+  const step = stepLabels[currentStep] || stepLabels.uploading;
 
   return (
-    <View style={genStyles.container}>
+    <View style={genStyles.container} testID="generation-screen">
       <Stack.Screen options={{ headerShown: false }} />
       <LinearGradient
         colors={['#0f0a1a', Colors.dark.background, '#0a0f14']}
@@ -472,21 +532,19 @@ export default function GenerationScreen() {
       <View style={genStyles.content}>
         <CircularProgress progress={progress} />
 
-        <Animated.View style={[genStyles.statusContainer, { opacity: stepOpacity }]}>
+        <Animated.View style={[genStyles.statusContainer, { opacity: stepOpacity }]}> 
           <Text style={genStyles.statusLabel}>{step.label}</Text>
-          <Text style={genStyles.statusSublabel}>
-            {statusDetail || step.sublabel}
-          </Text>
+          <Text style={genStyles.statusSublabel}>{statusDetail || step.sublabel}</Text>
         </Animated.View>
 
         {currentStep === 'error' && (
-          <TouchableOpacity onPress={handleRetry} style={genStyles.retryButton}>
-            <Text style={genStyles.retryText}>Try Again</Text>
+          <TouchableOpacity onPress={handleRetry} style={genStyles.retryButton} testID="generation-retry-button">
+            <Text style={genStyles.retryText}>Retry</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      <TouchableOpacity onPress={handleCancel} style={genStyles.cancelButton}>
+      <TouchableOpacity onPress={handleCancel} style={genStyles.cancelButton} testID="generation-cancel-button">
         <X size={18} color={Colors.dark.textSecondary} />
         <Text style={genStyles.cancelText}>Cancel</Text>
       </TouchableOpacity>
@@ -591,7 +649,6 @@ const sparkleStyles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    pointerEvents: 'none',
   },
   sparkle: {
     position: 'absolute',
