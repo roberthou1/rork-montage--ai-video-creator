@@ -1,0 +1,40 @@
+import { Project } from '@/types';
+
+export const sampleProjects: Project[] = [
+  {
+    id: 'p1',
+    createdAt: '2026-02-27T14:30:00Z',
+    musicTrackId: 'm1',
+    musicTrackName: 'Midnight Drive',
+    style: 'dynamic',
+    duration: 30,
+    aiEnhanced: true,
+    status: 'complete',
+    thumbnailUri: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=600&fit=crop',
+    mediaCount: 12,
+  },
+  {
+    id: 'p2',
+    createdAt: '2026-02-25T10:15:00Z',
+    musicTrackId: 'm4',
+    musicTrackName: 'Cinematic Rise',
+    style: 'cinematic',
+    duration: 60,
+    aiEnhanced: false,
+    status: 'complete',
+    thumbnailUri: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=400&h=600&fit=crop',
+    mediaCount: 18,
+  },
+  {
+    id: 'p3',
+    createdAt: '2026-02-22T18:45:00Z',
+    musicTrackId: 'm6',
+    musicTrackName: 'Rainy Afternoon',
+    style: 'dreamy',
+    duration: 15,
+    aiEnhanced: true,
+    status: 'complete',
+    thumbnailUri: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=400&h=600&fit=crop',
+    mediaCount: 8,
+  },
+];
