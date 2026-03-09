@@ -6,14 +6,7 @@ import { JobStatus, MontageStyle, MusicMode, PhotoItem, TargetDuration } from '@
 import { resolvePhUri } from '@/services/video-cache';
 import { isSupabaseConfigured, supabase } from '@/services/supabase';
 
-const CONFIGURED_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL?.trim() ?? '';
-const FALLBACK_BACKEND_URL = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim() ?? '';
-const BACKEND_URL = (CONFIGURED_BACKEND_URL || FALLBACK_BACKEND_URL).replace(/\/+$/, '');
-const BACKEND_URL_SOURCE = CONFIGURED_BACKEND_URL
-  ? 'EXPO_PUBLIC_BACKEND_URL'
-  : FALLBACK_BACKEND_URL
-    ? 'EXPO_PUBLIC_SUPABASE_URL'
-    : 'missing';
+const BACKEND_URL = (process.env.EXPO_PUBLIC_BACKEND_URL?.trim() ?? '').replace(/\/+$/, '');
 const MEDIA_UPLOAD_BUCKET = 'media-uploads';
 const DOWNLOAD_DIR = `${FileSystem.documentDirectory || ''}montage/`;
 const FRIENDLY_BACKEND_ERROR = 'Could not reach the montage server. Please check your connection and try again.';
@@ -66,7 +59,7 @@ function assertSupabaseConfigured(): void {
 
 function assertBackendConfigured(): void {
   if (!isBackendConfigured) {
-    console.warn('[BackendAPI] Missing backend URL. Set EXPO_PUBLIC_BACKEND_URL or reuse EXPO_PUBLIC_SUPABASE_URL if it proxies the montage API. DATABASE_URL is server-only and is not used by the Expo client.');
+    console.warn('[BackendAPI] Missing EXPO_PUBLIC_BACKEND_URL. DATABASE_URL is server-only and is not used by the Expo client.');
     throw new Error(FRIENDLY_BACKEND_ERROR);
   }
 }
@@ -126,7 +119,7 @@ function sanitizeBackendMessage(message?: string | null): string {
   }
 
   if (normalized.includes('not found') || normalized.includes('404')) {
-    return BACKEND_URL_SOURCE === 'EXPO_PUBLIC_SUPABASE_URL' ? MISSING_API_ERROR : FRIENDLY_BACKEND_ERROR;
+    return MISSING_API_ERROR;
   }
 
   return trimmed;
@@ -315,7 +308,10 @@ export async function uploadMediaToSupabase(uri: string, assetId: string): Promi
 export async function createMontageJob(params: CreateMontageJobParams): Promise<CreateMontageJobResult> {
   assertBackendConfigured();
 
-  console.log('[BackendAPI] Creating montage job with backend source:', BACKEND_URL_SOURCE, params);
+  console.log('[BackendAPI] Creating montage job:', {
+    backendUrl: BACKEND_URL,
+    params,
+  });
 
   try {
     const response = await fetch(buildBackendUrl('/api/montages'), {
@@ -365,7 +361,10 @@ export async function createMontageJob(params: CreateMontageJobParams): Promise<
 export async function pollJobStatus(jobId: string): Promise<JobStatus> {
   assertBackendConfigured();
 
-  console.log('[BackendAPI] Polling montage job with backend source:', BACKEND_URL_SOURCE, jobId);
+  console.log('[BackendAPI] Polling montage job status:', {
+    backendUrl: BACKEND_URL,
+    jobId,
+  });
 
   try {
     const response = await fetch(buildBackendUrl(`/api/montages/${jobId}/status`), {
@@ -400,17 +399,22 @@ export async function downloadVideo(url: string): Promise<string> {
     return url;
   }
 
-  await ensureDownloadDirectory();
-  const destination = `${DOWNLOAD_DIR}${Date.now()}_${randomId()}.mp4`;
-  const result = await FileSystem.downloadAsync(url, destination);
+  try {
+    await ensureDownloadDirectory();
+    const destination = `${DOWNLOAD_DIR}${Date.now()}_${randomId()}.mp4`;
+    const result = await FileSystem.downloadAsync(url, destination);
 
-  if (result.status !== 200) {
-    console.error('[BackendAPI] Download failed with status:', result.status);
-    throw new Error('Failed to download the final montage');
+    if (result.status !== 200) {
+      console.error('[BackendAPI] Download failed with status:', result.status);
+      throw new Error('Failed to download the final montage');
+    }
+
+    console.log('[BackendAPI] Downloaded final montage to:', result.uri);
+    return result.uri;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to download the final montage';
+    throw new Error(sanitizeBackendMessage(message));
   }
-
-  console.log('[BackendAPI] Downloaded final montage to:', result.uri);
-  return result.uri;
 }
 
 export { FRIENDLY_BACKEND_ERROR };

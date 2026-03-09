@@ -240,8 +240,14 @@ export default function GenerationScreen() {
   const [retryNonce, setRetryNonce] = useState<number>(0);
   const stepOpacity = useRef(new Animated.Value(1)).current;
   const abortRef = useRef<{ aborted: boolean }>({ aborted: false });
+  const currentStepRef = useRef<GenerationStepKey>('uploading');
 
   const animateStepChange = useCallback((newStep: GenerationStepKey) => {
+    if (currentStepRef.current === newStep) {
+      return;
+    }
+
+    currentStepRef.current = newStep;
     Animated.sequence([
       Animated.timing(stepOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
       Animated.timing(stepOpacity, { toValue: 1, duration: 150, useNativeDriver: true }),
@@ -277,13 +283,15 @@ export default function GenerationScreen() {
       const style = (params.style as MontageStyle) || 'dynamic';
       const duration = (Number(params.duration) || 30) as TargetDuration;
       const aiEnhance = params.aiEnhance === 'true';
-      const musicMode: MusicMode =
+      const requestedMusicMode: MusicMode =
         params.musicMode === 'preset' || params.musicMode === 'ai-generated'
           ? params.musicMode
           : 'none';
       const musicBpm = params.musicBpm ? Number(params.musicBpm) : null;
       const normalizedMusicBpm = Number.isFinite(musicBpm) ? musicBpm : null;
       const musicUrl = params.musicUrl || null;
+      const musicMode: MusicMode =
+        requestedMusicMode === 'preset' && !musicUrl ? 'none' : requestedMusicMode;
       const projectId = `p-${Date.now()}`;
 
       console.log('[Generation] Starting backend montage generation', {
@@ -369,7 +377,11 @@ export default function GenerationScreen() {
 
         console.log('[Generation] Backend job created:', job);
         setProgress(35);
-        setStatusDetail(`Job started. Estimated time: ${job.estimatedSeconds}s`);
+        setStatusDetail(
+          job.estimatedSeconds > 0
+            ? `Job started. Estimated time: ${job.estimatedSeconds}s`
+            : 'Job started. Waiting for the montage server...'
+        );
 
         let finalResultUrl: string | null = null;
 
@@ -511,6 +523,7 @@ export default function GenerationScreen() {
 
   const handleRetry = useCallback(() => {
     abortRef.current.aborted = true;
+    currentStepRef.current = 'uploading';
     setProgress(0);
     setStatusDetail('');
     setCurrentStep('uploading');
