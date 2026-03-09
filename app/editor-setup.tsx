@@ -10,7 +10,7 @@ import {
   TextInput,
   FlatList,
   Platform,
-  Switch,
+  // Switch, // TODO: Re-enable when AI photo motion toggle is added back
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
@@ -255,7 +255,9 @@ export default function EditorSetupScreen() {
   const [style, setStyle] = useState<MontageStyle>(settings.defaultStyle);
   const [duration, setDuration] = useState<TargetDuration>(30);
   const [musicBrowserVisible, setMusicBrowserVisible] = useState<boolean>(false);
-  const [aiEnhance, setAiEnhance] = useState<boolean>(settings.aiEnhancementDefault);
+  // TODO: Re-enable AI photo-to-video enhancement when ready
+  // const [aiEnhance, setAiEnhance] = useState<boolean>(settings.aiEnhancementDefault);
+  const aiEnhance = false;
   const buttonScale = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -456,6 +458,7 @@ export default function EditorSetupScreen() {
         </View>
         <Text style={styles.durationNote}>Clips will be trimmed and synced to fit your target duration</Text>
 
+        {/* TODO: Re-enable AI photo motion when image-to-video is supported
         <Text style={styles.sectionLabel}>PHOTO MOTION</Text>
         <View style={styles.aiCard}>
           <View style={styles.aiCardLeft}>
@@ -481,6 +484,7 @@ export default function EditorSetupScreen() {
             thumbColor={aiEnhance ? Colors.dark.accent : Colors.dark.textTertiary}
           />
         </View>
+        */}
 
         <Text style={styles.sectionLabel}>BEAT SYNC</Text>
         <View style={styles.aiCard}>

@@ -15,7 +15,7 @@ export default function CreateLayout() {
       <Stack.Screen
         name="select-photos"
         options={{
-          title: 'Select Photos',
+          title: 'Select Videos',
           presentation: 'modal',
           headerShadowVisible: false,
         }}
