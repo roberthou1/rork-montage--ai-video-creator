@@ -9,6 +9,8 @@ import { isSupabaseConfigured, supabase } from '@/services/supabase';
 const BACKEND_URL = (process.env.EXPO_PUBLIC_BACKEND_URL?.trim() ?? '').replace(/\/+$/, '');
 const MEDIA_UPLOAD_BUCKET = 'media-uploads';
 const DOWNLOAD_DIR = `${FileSystem.documentDirectory || ''}montage/`;
+const MAX_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024;
+const MAX_UPLOAD_SIZE_LABEL = '50MB';
 const FRIENDLY_BACKEND_ERROR = 'Could not reach the montage server. Please check your connection and try again.';
 const MISSING_API_ERROR = 'The montage API was not found at the configured server. Please verify the backend URL and try again.';
 
@@ -292,6 +294,14 @@ async function uploadToSupabase(path: string, data: Uint8Array, contentType: str
   return publicUrl;
 }
 
+export class FileTooLargeError extends Error {
+  constructor(sizeBytes: number) {
+    const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(1);
+    super(`This file is ${sizeMB}MB which exceeds the ${MAX_UPLOAD_SIZE_LABEL} upload limit. Try a shorter or lower-resolution clip.`);
+    this.name = 'FileTooLargeError';
+  }
+}
+
 export async function uploadMediaToSupabase(uri: string, assetId: string): Promise<string> {
   assertSupabaseConfigured();
 
@@ -302,6 +312,12 @@ export async function uploadMediaToSupabase(uri: string, assetId: string): Promi
   const storagePath = `uploads/${Date.now()}_${randomId()}.${prepared.extension}`;
 
   console.log('[BackendAPI] Upload path:', storagePath, 'bytes:', fileBytes.byteLength);
+
+  if (fileBytes.byteLength > MAX_UPLOAD_SIZE_BYTES) {
+    console.warn('[BackendAPI] File too large:', fileBytes.byteLength, 'bytes, limit:', MAX_UPLOAD_SIZE_BYTES);
+    throw new FileTooLargeError(fileBytes.byteLength);
+  }
+
   return uploadToSupabase(storagePath, fileBytes, prepared.contentType);
 }
 

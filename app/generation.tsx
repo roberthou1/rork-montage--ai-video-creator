@@ -20,6 +20,7 @@ import { MontageStyle, MusicMode, PhotoItem, Project, TargetDuration } from '@/t
 import {
   createMontageJob,
   downloadVideo,
+  FileTooLargeError,
   FRIENDLY_BACKEND_ERROR,
   pollJobStatus,
   uploadMediaToSupabase,
@@ -307,7 +308,7 @@ export default function GenerationScreen() {
 
       try {
         if (selectedMedia.length === 0) {
-          throw new Error('Please select at least one photo or video to create a montage.');
+          throw new Error('Please select at least one video to create a montage.');
         }
 
         animateStepChange('uploading');
@@ -326,6 +327,7 @@ export default function GenerationScreen() {
 
           let uploadUrl: string | null = null;
           let lastError: unknown = null;
+          let skippedTooLarge = false;
 
           for (let attempt = 0; attempt < 3; attempt += 1) {
             try {
@@ -333,12 +335,24 @@ export default function GenerationScreen() {
               uploadUrl = await uploadMediaToSupabase(mediaItem.uri, mediaItem.id);
               break;
             } catch (error) {
+              if (error instanceof FileTooLargeError) {
+                console.warn('[Generation] Skipping oversized file:', mediaItem.id, error.message);
+                skippedTooLarge = true;
+                break;
+              }
               lastError = error;
               console.error('[Generation] Upload failed for media', mediaItem.id, 'attempt', attempt + 1, error);
               if (attempt < 2) {
                 await delay(600);
               }
             }
+          }
+
+          if (skippedTooLarge) {
+            setStatusDetail(`Skipped oversized clip (${index + 1}/${selectedMedia.length})`);
+            const uploadProgress = ((index + 1) / selectedMedia.length) * 30;
+            setProgress(clampProgress(uploadProgress));
+            continue;
           }
 
           if (!uploadUrl) {
@@ -359,6 +373,10 @@ export default function GenerationScreen() {
 
         if (abortRef.current.aborted) {
           return;
+        }
+
+        if (uploadedMediaItems.length === 0) {
+          throw new Error('All selected clips were too large to upload. Please choose shorter or lower-resolution videos.');
         }
 
         animateStepChange('starting');

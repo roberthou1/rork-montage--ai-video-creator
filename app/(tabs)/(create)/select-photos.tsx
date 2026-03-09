@@ -53,7 +53,7 @@ function PhotoCell({
       <Animated.View style={[gridStyles.cell, { transform: [{ scale: scaleAnim }] }]}>
         <Image source={{ uri: item.uri }} style={gridStyles.image} contentFit="cover" />
 
-        {item.duration && (
+        {item.duration != null && item.duration > 0 && (
           <View style={gridStyles.durationBadge}>
             <Play size={10} color="#fff" fill="#fff" />
             <Text style={gridStyles.durationText}>
