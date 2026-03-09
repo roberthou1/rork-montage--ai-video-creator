@@ -84,7 +84,7 @@ function PhotoCell({
 export default function SelectPhotosScreen() {
   const router = useRouter();
   const [selected, setSelected] = useState<string[]>([]);
-  const barAnim = useRef(new Animated.Value(0)).current;
+
   const selectionLockRef = useRef<Record<string, boolean>>({});
   const { photos: libraryPhotos, loadMore, loadInitialPhotos } = usePhotoLibrary();
 
@@ -115,18 +115,19 @@ export default function SelectPhotosScreen() {
         next = [...prev, item.id];
       }
 
-      Animated.spring(barAnim, {
-        toValue: next.length > 0 ? 1 : 0,
-        useNativeDriver: true,
-        friction: 6,
-      }).start();
-
       return next;
     });
-  }, [barAnim]);
+  }, []);
+
+  const navigatingRef = useRef(false);
 
   const handleContinue = useCallback(() => {
     if (selected.length < 2) return;
+    if (navigatingRef.current) {
+      console.log('[SelectPhotos] Navigation already in progress, ignoring');
+      return;
+    }
+    navigatingRef.current = true;
     if (Platform.OS !== 'web') {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
@@ -135,6 +136,7 @@ export default function SelectPhotosScreen() {
       pathname: '/editor-setup',
       params: { selectedIds: selected.join(',') },
     });
+    setTimeout(() => { navigatingRef.current = false; }, 1500);
   }, [selected, router]);
 
   const renderItem = useCallback(({ item }: { item: PhotoItem }) => {
@@ -148,10 +150,7 @@ export default function SelectPhotosScreen() {
     );
   }, [selected, handleSelect]);
 
-  const barTranslate = barAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [120, 0],
-  });
+
 
   const showWarning = selected.length >= 20;
 
@@ -182,34 +181,31 @@ export default function SelectPhotosScreen() {
         </View>
       )}
 
-      <Animated.View
-        style={[
-          styles.bottomBar,
-          { transform: [{ translateY: barTranslate }] },
-        ]}
-      >
-        <View style={styles.bottomBarInner}>
-          <ScrollableSelected selectedPhotos={selectedPhotos} />
-          <View style={styles.bottomBarActions}>
-            <Text style={styles.countText}>{selected.length} selected</Text>
-            <TouchableOpacity
-              onPress={handleContinue}
-              activeOpacity={0.8}
-              disabled={selected.length < 2}
-              style={styles.continueHitArea}
-            >
-              <LinearGradient
-                colors={selected.length >= 2 ? [Colors.dark.accent, Colors.dark.accentDark] : ['#333', '#333']}
-                style={styles.continueButton}
+      {selected.length > 0 && (
+        <View style={styles.bottomBar} pointerEvents="box-none">
+          <View style={styles.bottomBarInner}>
+            <ScrollableSelected selectedPhotos={selectedPhotos} />
+            <View style={styles.bottomBarActions}>
+              <Text style={styles.countText}>{selected.length} selected</Text>
+              <TouchableOpacity
+                onPress={handleContinue}
+                activeOpacity={0.8}
+                disabled={selected.length < 2}
+                style={styles.continueHitArea}
               >
-                <Text style={[styles.continueText, selected.length < 2 && { opacity: 0.5 }]}>
-                  Continue
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={selected.length >= 2 ? [Colors.dark.accent, Colors.dark.accentDark] : ['#333', '#333']}
+                  style={styles.continueButton}
+                >
+                  <Text style={[styles.continueText, selected.length < 2 && { opacity: 0.5 }]}>
+                    Continue
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </Animated.View>
+      )}
     </View>
   );
 }
