@@ -122,7 +122,11 @@ export default function SelectPhotosScreen() {
   const navigatingRef = useRef(false);
 
   const handleContinue = useCallback(() => {
-    if (selected.length < 2) return;
+    console.log('[SelectPhotos] Continue pressed, selected count:', selected.length);
+    if (selected.length < 1) {
+      console.log('[SelectPhotos] No items selected, ignoring');
+      return;
+    }
     if (navigatingRef.current) {
       console.log('[SelectPhotos] Navigation already in progress, ignoring');
       return;
@@ -131,12 +135,21 @@ export default function SelectPhotosScreen() {
     if (Platform.OS !== 'web') {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    console.log('[SelectPhotos] Continue pressed with', selected.length, 'items:', selected.join(','));
-    router.push({
-      pathname: '/editor-setup',
-      params: { selectedIds: selected.join(',') },
-    });
-    setTimeout(() => { navigatingRef.current = false; }, 1500);
+    const ids = selected.join(',');
+    console.log('[SelectPhotos] Navigating to editor-setup with ids:', ids);
+    try {
+      router.dismiss();
+      setTimeout(() => {
+        router.push({
+          pathname: '/editor-setup',
+          params: { selectedIds: ids },
+        });
+        console.log('[SelectPhotos] router.push called successfully');
+      }, 100);
+    } catch (error) {
+      console.error('[SelectPhotos] Navigation error:', error);
+    }
+    setTimeout(() => { navigatingRef.current = false; }, 2000);
   }, [selected, router]);
 
   const renderItem = useCallback(({ item }: { item: PhotoItem }) => {
@@ -190,14 +203,14 @@ export default function SelectPhotosScreen() {
               <TouchableOpacity
                 onPress={handleContinue}
                 activeOpacity={0.8}
-                disabled={selected.length < 2}
+                disabled={selected.length < 1}
                 style={styles.continueHitArea}
               >
                 <LinearGradient
-                  colors={selected.length >= 2 ? [Colors.dark.accent, Colors.dark.accentDark] : ['#333', '#333']}
+                  colors={selected.length >= 1 ? [Colors.dark.accent, Colors.dark.accentDark] : ['#333', '#333']}
                   style={styles.continueButton}
                 >
-                  <Text style={[styles.continueText, selected.length < 2 && { opacity: 0.5 }]}>
+                  <Text style={[styles.continueText, selected.length < 1 && { opacity: 0.5 }]}>
                     Continue
                   </Text>
                 </LinearGradient>
