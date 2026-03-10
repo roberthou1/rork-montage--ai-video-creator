@@ -251,7 +251,7 @@ export default function EditorSetupScreen() {
   const { settings } = useApp();
 
   const [selectedTrack, setSelectedTrack] = useState<MusicTrack | null>(null);
-  const [musicMode, setMusicMode] = useState<'preset' | 'ai-generated' | 'none'>('none');
+  const [musicMode, setMusicMode] = useState<'preset' | 'ai-generated' | 'none'>('ai-generated');
   const [style, setStyle] = useState<MontageStyle>(settings.defaultStyle);
   const [duration, setDuration] = useState<TargetDuration>(30);
   const [musicBrowserVisible, setMusicBrowserVisible] = useState<boolean>(false);
