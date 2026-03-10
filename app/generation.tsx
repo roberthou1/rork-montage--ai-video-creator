@@ -307,23 +307,26 @@ export default function GenerationScreen() {
       });
 
       try {
-        if (selectedMedia.length === 0) {
+        const videoMedia = selectedMedia.filter((item) => item.type === 'video');
+        console.log('[Generation] Filtered to video-only media:', videoMedia.length, 'of', selectedMedia.length);
+
+        if (videoMedia.length === 0) {
           throw new Error('Please select at least one video to create a montage.');
         }
 
         animateStepChange('uploading');
         setProgress(0);
-        setStatusDetail(`Uploading 0 of ${selectedMedia.length}...`);
+        setStatusDetail(`Uploading 0 of ${videoMedia.length}...`);
 
         const uploadedMediaItems: { url: string; type: PhotoItem['type']; duration: number | null }[] = [];
 
-        for (let index = 0; index < selectedMedia.length; index += 1) {
+        for (let index = 0; index < videoMedia.length; index += 1) {
           if (abortRef.current.aborted) {
             return;
           }
 
-          const mediaItem = selectedMedia[index];
-          setStatusDetail(`Uploading ${index + 1} of ${selectedMedia.length}...`);
+          const mediaItem = videoMedia[index];
+          setStatusDetail(`Uploading ${index + 1} of ${videoMedia.length}...`);
 
           let uploadUrl: string | null = null;
           let lastError: unknown = null;
@@ -350,7 +353,7 @@ export default function GenerationScreen() {
 
           if (skippedTooLarge) {
             setStatusDetail(`Skipped oversized clip (${index + 1}/${selectedMedia.length})`);
-            const uploadProgress = ((index + 1) / selectedMedia.length) * 30;
+            const uploadProgress = ((index + 1) / videoMedia.length) * 30;
             setProgress(clampProgress(uploadProgress));
             continue;
           }
@@ -366,7 +369,7 @@ export default function GenerationScreen() {
             duration: mediaItem.type === 'video' ? mediaItem.duration ?? null : null,
           });
 
-          const uploadProgress = ((index + 1) / selectedMedia.length) * 30;
+          const uploadProgress = ((index + 1) / videoMedia.length) * 30;
           setProgress(clampProgress(uploadProgress));
           console.log('[Generation] Upload complete for media', mediaItem.id, 'progress:', uploadProgress);
         }
