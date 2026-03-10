@@ -182,7 +182,7 @@ export default function SelectPhotosScreen() {
       )}
 
       {selected.length > 0 && (
-        <View style={styles.bottomBar} pointerEvents="box-none">
+        <View style={styles.bottomBar}>
           <View style={styles.bottomBarInner}>
             <ScrollableSelected selectedPhotos={selectedPhotos} />
             <View style={styles.bottomBarActions}>
@@ -256,6 +256,7 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 100,
     elevation: 10,
+    pointerEvents: 'auto' as const,
   },
   bottomBarInner: {
     backgroundColor: Colors.dark.surface,

@@ -14,11 +14,13 @@ import {
   GestureResponderEvent,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { useEvent } from 'expo';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import * as MediaLibrary from 'expo-media-library';
+import * as FileSystem from 'expo-file-system/legacy';
 import {
   Play,
   Pause,
@@ -34,6 +36,7 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
 
 const { width, height } = Dimensions.get('window');
+const CACHE_DIR = `${FileSystem.cacheDirectory || ''}preview-cache/`;
 
 function ConfettiAnimation({ visible }: { visible: boolean }) {
   const particles = useRef(
@@ -109,82 +112,147 @@ function formatTime(totalSeconds: number): string {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
+async function ensurePreviewCacheDir(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const dirInfo = await FileSystem.getInfoAsync(CACHE_DIR);
+    if (!dirInfo.exists) {
+      await FileSystem.makeDirectoryAsync(CACHE_DIR, { intermediates: true });
+    }
+  } catch (error) {
+    console.error('[Preview] Error creating preview cache dir:', error);
+  }
+}
+
+async function downloadToLocalCache(remoteUrl: string): Promise<string> {
+  if (Platform.OS === 'web') return remoteUrl;
+  if (remoteUrl.startsWith('file://')) return remoteUrl;
+
+  console.log('[Preview] Downloading video to local cache:', remoteUrl.substring(0, 80));
+  await ensurePreviewCacheDir();
+  const filename = `preview_${Date.now()}.mp4`;
+  const localPath = `${CACHE_DIR}${filename}`;
+
+  const result = await FileSystem.downloadAsync(remoteUrl, localPath);
+  if (result.status !== 200) {
+    console.error('[Preview] Download failed with status:', result.status);
+    throw new Error('Failed to download video for preview');
+  }
+
+  const info = await FileSystem.getInfoAsync(result.uri);
+  console.log('[Preview] Video cached locally:', result.uri, 'size:', (info as any).size || 'unknown');
+  return result.uri;
+}
+
 export default function PreviewScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ projectId: string }>();
   const { projects } = useApp();
 
-  const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [showConfetti, setShowConfetti] = useState<boolean>(false);
   const [exporting, setExporting] = useState<boolean>(false);
   const [exportDone, setExportDone] = useState<boolean>(false);
   const [videoProgress, setVideoProgress] = useState<number>(0);
-  const [positionMillis, setPositionMillis] = useState<number>(0);
-  const [durationMillis, setDurationMillis] = useState<number>(0);
+  const [positionSeconds, setPositionSeconds] = useState<number>(0);
+  const [durationSeconds, setDurationSeconds] = useState<number>(0);
   const [videoLoading, setVideoLoading] = useState<boolean>(true);
+  const [localCachedPath, setLocalCachedPath] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const playButtonOpacity = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const videoRef = useRef<Video>(null);
+  const videoViewRef = useRef<VideoView>(null);
   const timelineWidthRef = useRef<number>(1);
-  const isPlayingRef = useRef<boolean>(true);
-  const lastProgressUpdateRef = useRef<number>(0);
+  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const project = projects.find((item) => item.id === params.projectId);
   const localVideoPath = project?.localVideoPath ?? null;
   const hasVideo = Boolean(localVideoPath);
 
   useEffect(() => {
+    if (!localVideoPath) return;
+
+    let cancelled = false;
+    setVideoLoading(true);
+    setDownloadError(null);
+
+    downloadToLocalCache(localVideoPath)
+      .then((cachedPath) => {
+        if (!cancelled) {
+          console.log('[Preview] Video ready for playback:', cachedPath.substring(0, 80));
+          setLocalCachedPath(cachedPath);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('[Preview] Failed to cache video:', error);
+          setDownloadError(error instanceof Error ? error.message : 'Failed to load video');
+          setVideoLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [localVideoPath]);
+
+  const videoSource = localCachedPath ?? '';
+
+  const player = useVideoPlayer(videoSource, (p) => {
+    if (localCachedPath) {
+      console.log('[Preview] Initializing video player with source:', localCachedPath.substring(0, 80));
+      p.loop = true;
+      p.play();
+    }
+  });
+
+  const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing });
+
+  useEffect(() => {
+    if (!localCachedPath) return;
+
+    const checkStatus = () => {
+      try {
+        const dur = player.duration;
+        const pos = player.currentTime;
+
+        if (dur > 0 && Number.isFinite(dur)) {
+          setDurationSeconds(dur);
+          setPositionSeconds(pos);
+          setVideoProgress(pos / dur);
+
+          if (videoLoading) {
+            setVideoLoading(false);
+          }
+        }
+      } catch {
+        // player might not be ready yet
+      }
+    };
+
+    progressIntervalRef.current = setInterval(checkStatus, 300);
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
+  }, [localCachedPath, player, videoLoading]);
+
+  useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
   }, [fadeAnim]);
 
-  const handlePlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
-    if (!status.isLoaded) {
-      setVideoLoading(true);
-      return;
-    }
-
-    setVideoLoading(false);
-
-    const now = Date.now();
-    if (now - lastProgressUpdateRef.current < 250) {
-      return;
-    }
-    lastProgressUpdateRef.current = now;
-
-    const pos = status.positionMillis ?? 0;
-    const dur = status.durationMillis ?? 0;
-
-    setPositionMillis(pos);
-    setDurationMillis(dur);
-
-    if (dur > 0) {
-      setVideoProgress(pos / dur);
-    }
-
-    if (status.isPlaying !== isPlayingRef.current) {
-      isPlayingRef.current = status.isPlaying;
-      setIsPlaying(status.isPlaying);
-    }
-  }, []);
-
   const togglePlay = useCallback(() => {
-    if (!hasVideo || !videoRef.current) {
-      return;
-    }
+    if (!localCachedPath) return;
 
     if (Platform.OS !== 'web') {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
 
-    const nextIsPlaying = !isPlaying;
-    isPlayingRef.current = nextIsPlaying;
-    setIsPlaying(nextIsPlaying);
-
-    if (nextIsPlaying) {
-      void videoRef.current.playAsync();
+    if (isPlaying) {
+      player.pause();
     } else {
-      void videoRef.current.pauseAsync();
+      player.play();
     }
 
     Animated.sequence([
@@ -192,24 +260,23 @@ export default function PreviewScreen() {
       Animated.delay(600),
       Animated.timing(playButtonOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
     ]).start();
-  }, [hasVideo, isPlaying, playButtonOpacity]);
+  }, [localCachedPath, isPlaying, player, playButtonOpacity]);
 
   const seekToPosition = useCallback((event: GestureResponderEvent) => {
-    if (!hasVideo || !videoRef.current || durationMillis <= 0) {
-      return;
-    }
+    if (!localCachedPath || durationSeconds <= 0) return;
 
     const ratio = Math.max(0, Math.min(1, event.nativeEvent.locationX / Math.max(1, timelineWidthRef.current)));
-    const nextPosition = ratio * durationMillis;
+    const nextPosition = ratio * durationSeconds;
 
-    console.log('[Preview] Seeking video:', { ratio, nextPosition, durationMillis });
-    setPositionMillis(nextPosition);
+    console.log('[Preview] Seeking video:', { ratio, nextPosition, durationSeconds });
+    setPositionSeconds(nextPosition);
     setVideoProgress(ratio);
-    void videoRef.current.setPositionAsync(nextPosition);
-  }, [durationMillis, hasVideo]);
+    player.currentTime = nextPosition;
+  }, [durationSeconds, localCachedPath, player]);
 
   const handleShare = useCallback(async () => {
-    if (!localVideoPath) {
+    const sharePath = localCachedPath ?? localVideoPath;
+    if (!sharePath) {
       Alert.alert('No Video', 'There is no finished montage available to share.');
       return;
     }
@@ -217,7 +284,7 @@ export default function PreviewScreen() {
     try {
       if (Platform.OS === 'web') {
         if (typeof window !== 'undefined') {
-          window.open(localVideoPath, '_blank', 'noopener,noreferrer');
+          window.open(sharePath, '_blank', 'noopener,noreferrer');
         }
         return;
       }
@@ -225,16 +292,17 @@ export default function PreviewScreen() {
       await Share.share({
         title: 'My Montage',
         message: 'Check out my montage',
-        url: localVideoPath,
+        url: sharePath,
       });
     } catch (error) {
       console.error('[Preview] Share failed:', error);
       Alert.alert('Share Failed', 'Could not open the share sheet right now.');
     }
-  }, [localVideoPath]);
+  }, [localCachedPath, localVideoPath]);
 
   const handleExport = useCallback(async () => {
-    if (!localVideoPath) {
+    const exportPath = localCachedPath ?? localVideoPath;
+    if (!exportPath) {
       Alert.alert('No Video', 'There is no finished montage available to export.');
       return;
     }
@@ -248,7 +316,7 @@ export default function PreviewScreen() {
     try {
       if (Platform.OS === 'web') {
         if (typeof window !== 'undefined') {
-          window.open(localVideoPath, '_blank', 'noopener,noreferrer');
+          window.open(exportPath, '_blank', 'noopener,noreferrer');
         }
         setExportDone(true);
         return;
@@ -260,8 +328,8 @@ export default function PreviewScreen() {
         return;
       }
 
-      console.log('[Preview] Saving composed video to library:', localVideoPath);
-      await MediaLibrary.createAssetAsync(localVideoPath);
+      console.log('[Preview] Saving composed video to library:', exportPath);
+      await MediaLibrary.createAssetAsync(exportPath);
       setExportDone(true);
       setShowConfetti(true);
 
@@ -279,7 +347,7 @@ export default function PreviewScreen() {
     } finally {
       setExporting(false);
     }
-  }, [handleShare, localVideoPath]);
+  }, [handleShare, localCachedPath, localVideoPath]);
 
   const handleRegenerate = useCallback(() => {
     if (Platform.OS !== 'web') {
@@ -292,9 +360,9 @@ export default function PreviewScreen() {
     router.replace('/(tabs)/projects' as any);
   }, [router]);
 
-  const effectiveDurationMillis = durationMillis || ((project?.duration ?? 30) * 1000);
-  const currentTime = positionMillis / 1000;
-  const totalTime = effectiveDurationMillis / 1000;
+  const effectiveDuration = durationSeconds || (project?.duration ?? 30);
+  const currentTime = positionSeconds;
+  const totalTime = effectiveDuration;
   const progressWidth = `${Math.min(videoProgress * 100, 100)}%`;
 
   return (
@@ -302,26 +370,26 @@ export default function PreviewScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <TouchableOpacity activeOpacity={1} onPress={togglePlay} style={previewStyles.videoContainer} testID="preview-video-tap-target">
-        {hasVideo && localVideoPath ? (
-          <Video
-            ref={videoRef}
-            source={{ uri: localVideoPath }}
+        {hasVideo && localCachedPath ? (
+          <VideoView
+            ref={videoViewRef}
+            player={player}
             style={StyleSheet.absoluteFill}
-            resizeMode={ResizeMode.COVER}
-            shouldPlay={isPlaying}
-            isLooping={true}
-            progressUpdateIntervalMillis={300}
-            onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-            onLoadStart={() => {
-              console.log('[Preview] Video load started');
-              setVideoLoading(true);
-            }}
-            onError={(error) => {
-              console.error('[Preview] Video error:', error);
-              setVideoLoading(false);
-            }}
-            videoStyle={{ width: '100%', height: '100%' }}
+            contentFit="cover"
+            nativeControls={false}
           />
+        ) : hasVideo && !downloadError ? (
+          <View style={previewStyles.emptyState}>
+            <ActivityIndicator size="large" color={Colors.dark.accent} />
+            <Text style={previewStyles.emptyTitle}>Loading video...</Text>
+            <Text style={previewStyles.emptySubtitle}>Preparing your montage for smooth playback</Text>
+          </View>
+        ) : downloadError ? (
+          <View style={previewStyles.emptyState}>
+            <Sparkles size={34} color={Colors.dark.accent} strokeWidth={1.6} />
+            <Text style={previewStyles.emptyTitle}>Could not load video</Text>
+            <Text style={previewStyles.emptySubtitle}>{downloadError}</Text>
+          </View>
         ) : (
           <View style={previewStyles.emptyState}>
             <Sparkles size={34} color={Colors.dark.accent} strokeWidth={1.6} />
@@ -332,7 +400,7 @@ export default function PreviewScreen() {
           </View>
         )}
 
-        {videoLoading && hasVideo && (
+        {videoLoading && hasVideo && localCachedPath && (
           <View style={previewStyles.loadingOverlay}>
             <ActivityIndicator size="small" color="#fff" />
           </View>
@@ -341,9 +409,10 @@ export default function PreviewScreen() {
         <LinearGradient
           colors={['rgba(0,0,0,0.4)', 'transparent', 'transparent', 'rgba(0,0,0,0.65)']}
           style={StyleSheet.absoluteFill}
+          pointerEvents="none"
         />
 
-        <Animated.View style={[previewStyles.playOverlay, { opacity: playButtonOpacity }]}> 
+        <Animated.View style={[previewStyles.playOverlay, { opacity: playButtonOpacity }]} pointerEvents="none"> 
           <View style={previewStyles.playCircle}>
             {isPlaying ? (
               <Pause size={32} color="#fff" fill="#fff" />
@@ -353,7 +422,7 @@ export default function PreviewScreen() {
           </View>
         </Animated.View>
 
-        <View style={previewStyles.badgeRow}>
+        <View style={previewStyles.badgeRow} pointerEvents="none">
           {project?.musicTrackName ? (
             <View style={previewStyles.musicBadge}>
               <Music size={10} color="#fff" />
