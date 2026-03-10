@@ -127,6 +127,8 @@ export default function PreviewScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const videoRef = useRef<Video>(null);
   const timelineWidthRef = useRef<number>(1);
+  const isPlayingRef = useRef<boolean>(true);
+  const lastProgressUpdateRef = useRef<number>(0);
 
   const project = projects.find((item) => item.id === params.projectId);
   const localVideoPath = project?.localVideoPath ?? null;
@@ -143,17 +145,28 @@ export default function PreviewScreen() {
     }
 
     setVideoLoading(false);
-    setPositionMillis(status.positionMillis ?? 0);
-    setDurationMillis(status.durationMillis ?? 0);
 
-    if ((status.durationMillis ?? 0) > 0) {
-      setVideoProgress((status.positionMillis ?? 0) / (status.durationMillis ?? 1));
+    const now = Date.now();
+    if (now - lastProgressUpdateRef.current < 250) {
+      return;
+    }
+    lastProgressUpdateRef.current = now;
+
+    const pos = status.positionMillis ?? 0;
+    const dur = status.durationMillis ?? 0;
+
+    setPositionMillis(pos);
+    setDurationMillis(dur);
+
+    if (dur > 0) {
+      setVideoProgress(pos / dur);
     }
 
-    if (status.isPlaying !== isPlaying) {
+    if (status.isPlaying !== isPlayingRef.current) {
+      isPlayingRef.current = status.isPlaying;
       setIsPlaying(status.isPlaying);
     }
-  }, [isPlaying]);
+  }, []);
 
   const togglePlay = useCallback(() => {
     if (!hasVideo || !videoRef.current) {
@@ -165,6 +178,7 @@ export default function PreviewScreen() {
     }
 
     const nextIsPlaying = !isPlaying;
+    isPlayingRef.current = nextIsPlaying;
     setIsPlaying(nextIsPlaying);
 
     if (nextIsPlaying) {
@@ -296,6 +310,7 @@ export default function PreviewScreen() {
             resizeMode={ResizeMode.COVER}
             shouldPlay={isPlaying}
             isLooping={true}
+            progressUpdateIntervalMillis={300}
             onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
             onLoadStart={() => {
               console.log('[Preview] Video load started');
