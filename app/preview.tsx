@@ -163,7 +163,6 @@ export default function PreviewScreen() {
   const videoRef = useRef<Video>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const timelineWidthRef = useRef<number>(1);
-  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const project = projects.find((item) => item.id === params.projectId);
   const localVideoPath = project?.localVideoPath ?? null;
@@ -219,7 +218,7 @@ export default function PreviewScreen() {
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
   }, [fadeAnim]);
 
-  const togglePlay = useCallback(() => {
+  const togglePlay = useCallback(async () => {
     if (!localCachedPath) return;
 
     if (Platform.OS !== 'web') {
@@ -248,7 +247,7 @@ export default function PreviewScreen() {
     console.log('[Preview] Seeking video:', { ratio, nextPosition, durationSeconds });
     setPositionSeconds(nextPosition);
     setVideoProgress(ratio);
-    videoRef.current?.setPositionAsync(nextPosition * 1000);
+    void videoRef.current?.setPositionAsync(nextPosition * 1000);
   }, [durationSeconds, localCachedPath]);
 
   const handleShare = useCallback(async () => {
