@@ -1,24 +1,24 @@
 import { PhotoItem, SmartCollection } from '@/types';
 
-const SAMPLE_VIDEO_BASE = 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264';
+const GTV = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample';
 
 const photoPool: PhotoItem[] = [
-  { id: '1', uri: `${SAMPLE_VIDEO_BASE}/360/Big_Buck_Bunny_360_10s_1MB.mp4`, type: 'video', date: '2026-02-27', isFavorite: true, location: 'Swiss Alps', duration: 10 },
-  { id: '2', uri: `${SAMPLE_VIDEO_BASE}/360/Big_Buck_Bunny_360_10s_1MB.mp4`, type: 'video', date: '2026-02-26', isFavorite: false, location: 'Yosemite', duration: 10 },
-  { id: '3', uri: `${SAMPLE_VIDEO_BASE}/360/Big_Buck_Bunny_360_10s_1MB.mp4`, type: 'video', date: '2026-02-25', isFavorite: true, location: 'Lake Bled', duration: 10 },
-  { id: '4', uri: `${SAMPLE_VIDEO_BASE}/360/Big_Buck_Bunny_360_10s_1MB.mp4`, type: 'video', date: '2026-02-25', isFavorite: false, duration: 10 },
-  { id: '5', uri: `${SAMPLE_VIDEO_BASE}/360/Big_Buck_Bunny_360_10s_1MB.mp4`, type: 'video', date: '2026-02-24', isFavorite: true, location: 'Maldives', duration: 10 },
-  { id: '6', uri: `${SAMPLE_VIDEO_BASE}/360/Big_Buck_Bunny_360_10s_1MB.mp4`, type: 'video', date: '2026-02-24', isFavorite: false, location: 'Mount Hood', duration: 10 },
-  { id: '7', uri: `${SAMPLE_VIDEO_BASE}/360/Big_Buck_Bunny_360_10s_1MB.mp4`, type: 'video', date: '2026-02-23', isFavorite: false, location: 'Norway', duration: 10 },
-  { id: '8', uri: `${SAMPLE_VIDEO_BASE}/360/Big_Buck_Bunny_360_10s_1MB.mp4`, type: 'video', date: '2026-02-23', isFavorite: true, duration: 10 },
-  { id: '9', uri: `${SAMPLE_VIDEO_BASE}/360/Big_Buck_Bunny_360_10s_1MB.mp4`, type: 'video', date: '2026-02-22', isFavorite: false, location: 'Foggy Forest', duration: 10 },
-  { id: '10', uri: `${SAMPLE_VIDEO_BASE}/360/Big_Buck_Bunny_360_10s_1MB.mp4`, type: 'video', date: '2026-02-22', isFavorite: true, duration: 10 },
-  { id: '11', uri: `${SAMPLE_VIDEO_BASE}/360/Big_Buck_Bunny_360_10s_1MB.mp4`, type: 'video', date: '2026-02-21', isFavorite: false, location: 'Beach Sunset', duration: 10 },
-  { id: '12', uri: `${SAMPLE_VIDEO_BASE}/360/Big_Buck_Bunny_360_10s_1MB.mp4`, type: 'video', date: '2026-02-21', isFavorite: false, location: 'Tokyo', duration: 10 },
-  { id: '13', uri: `${SAMPLE_VIDEO_BASE}/360/Big_Buck_Bunny_360_10s_1MB.mp4`, type: 'video', date: '2026-02-20', isFavorite: true, duration: 10 },
-  { id: '14', uri: `${SAMPLE_VIDEO_BASE}/360/Big_Buck_Bunny_360_10s_1MB.mp4`, type: 'video', date: '2026-02-20', isFavorite: false, duration: 10 },
-  { id: '15', uri: `${SAMPLE_VIDEO_BASE}/360/Big_Buck_Bunny_360_10s_1MB.mp4`, type: 'video', date: '2026-02-19', isFavorite: false, location: 'Patagonia', duration: 10 },
-  { id: '16', uri: `${SAMPLE_VIDEO_BASE}/360/Big_Buck_Bunny_360_10s_1MB.mp4`, type: 'video', date: '2026-02-19', isFavorite: true, location: 'Northern Lights', duration: 10 },
+  { id: '1', uri: `${GTV}/ForBiggerBlazes.mp4`, type: 'video', date: '2026-02-27', isFavorite: true, location: 'Swiss Alps', duration: 15 },
+  { id: '2', uri: `${GTV}/ForBiggerEscapes.mp4`, type: 'video', date: '2026-02-26', isFavorite: false, location: 'Yosemite', duration: 15 },
+  { id: '3', uri: `${GTV}/SubaruOutbackOnStreetAndDirt.mp4`, type: 'video', date: '2026-02-25', isFavorite: true, location: 'Lake Bled', duration: 60 },
+  { id: '4', uri: `${GTV}/BigBuckBunny.mp4`, type: 'video', date: '2026-02-25', isFavorite: false, duration: 596 },
+  { id: '5', uri: `${GTV}/ElephantsDream.mp4`, type: 'video', date: '2026-02-24', isFavorite: true, location: 'Maldives', duration: 654 },
+  { id: '6', uri: `${GTV}/ForBiggerFun.mp4`, type: 'video', date: '2026-02-24', isFavorite: false, location: 'Mount Hood', duration: 60 },
+  { id: '7', uri: `${GTV}/ForBiggerJoyrides.mp4`, type: 'video', date: '2026-02-23', isFavorite: false, location: 'Norway', duration: 15 },
+  { id: '8', uri: `${GTV}/ForBiggerMeltdowns.mp4`, type: 'video', date: '2026-02-23', isFavorite: true, duration: 15 },
+  { id: '9', uri: `${GTV}/Sintel.mp4`, type: 'video', date: '2026-02-22', isFavorite: false, location: 'Foggy Forest', duration: 888 },
+  { id: '10', uri: `${GTV}/VolkswagenGTIReview.mp4`, type: 'video', date: '2026-02-22', isFavorite: true, duration: 60 },
+  { id: '11', uri: `${GTV}/ForBiggerBlazes.mp4`, type: 'video', date: '2026-02-21', isFavorite: false, location: 'Beach Sunset', duration: 15 },
+  { id: '12', uri: `${GTV}/ForBiggerEscapes.mp4`, type: 'video', date: '2026-02-21', isFavorite: false, location: 'Tokyo', duration: 15 },
+  { id: '13', uri: `${GTV}/ForBiggerFun.mp4`, type: 'video', date: '2026-02-20', isFavorite: true, duration: 60 },
+  { id: '14', uri: `${GTV}/ForBiggerJoyrides.mp4`, type: 'video', date: '2026-02-20', isFavorite: false, duration: 15 },
+  { id: '15', uri: `${GTV}/ForBiggerMeltdowns.mp4`, type: 'video', date: '2026-02-19', isFavorite: false, location: 'Patagonia', duration: 15 },
+  { id: '16', uri: `${GTV}/SubaruOutbackOnStreetAndDirt.mp4`, type: 'video', date: '2026-02-19', isFavorite: true, location: 'Northern Lights', duration: 60 },
 ];
 
 export const allPhotos = photoPool;
