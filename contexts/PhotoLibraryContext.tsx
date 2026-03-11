@@ -4,7 +4,7 @@ import * as MediaLibrary from 'expo-media-library';
 import createContextHook from '@nkzw/create-context-hook';
 import { PhotoItem, SmartCollection } from '@/types';
 import { allPhotos as mockPhotos, smartCollections as mockCollections } from '@/mocks/photos';
-import { fetchSmartCollections, isBackendConfigured } from '@/services/backend-api';
+import { fetchSmartCollections, isBackendConfigured } from '@/services/smart-collections-api';
 
 const PAGE_SIZE = 100;
 
