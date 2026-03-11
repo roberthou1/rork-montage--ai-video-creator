@@ -130,8 +130,7 @@ export default function CreateScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const { permissionStatus, photos, loadInitialPhotos, requestPermission, getSmartCollections } = usePhotoLibrary();
-  const smartCollections = getSmartCollections();
+  const { permissionStatus, photos, loadInitialPhotos, requestPermission, smartCollections } = usePhotoLibrary();
 
   useEffect(() => {
     Animated.timing(fadeAnim, {

@@ -1,9 +1,10 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import createContextHook from '@nkzw/create-context-hook';
 import { PhotoItem, SmartCollection } from '@/types';
 import { allPhotos as mockPhotos, smartCollections as mockCollections } from '@/mocks/photos';
+import { fetchSmartCollections, isBackendConfigured } from '@/services/backend-api';
 
 const PAGE_SIZE = 100;
 
@@ -82,6 +83,9 @@ export const [PhotoLibraryProvider, usePhotoLibrary] = createContextHook(() => {
   const [totalCount, setTotalCount] = useState<number>(0);
 
   const isWeb = Platform.OS === 'web';
+  const [smartCollections, setSmartCollections] = useState<SmartCollection[]>(mockCollections);
+  const [isLoadingCollections, setIsLoadingCollections] = useState<boolean>(false);
+  const lastPhotosHashRef = useRef<string>('');
 
   const checkPermission = useCallback(async () => {
     if (isWeb) {
@@ -235,8 +239,8 @@ export const [PhotoLibraryProvider, usePhotoLibrary] = createContextHook(() => {
     }
   }, [isLoading, hasMore, isWeb, fetchPhotos]);
 
-  const getSmartCollections = useCallback((): SmartCollection[] => {
-    if (isWeb || photos.length === 0) {
+  const getLocalSmartCollections = useCallback((): SmartCollection[] => {
+    if (photos.length === 0) {
       return mockCollections;
     }
 
@@ -310,7 +314,79 @@ export const [PhotoLibraryProvider, usePhotoLibrary] = createContextHook(() => {
     }
 
     return collections.length > 0 ? collections : mockCollections;
-  }, [photos, isWeb]);
+  }, [photos]);
+
+  useEffect(() => {
+    const photosHash = photos.map(p => p.id).sort().join(',');
+    if (photosHash === lastPhotosHashRef.current || photos.length === 0) {
+      return;
+    }
+    lastPhotosHashRef.current = photosHash;
+
+    if (isWeb || !isBackendConfigured) {
+      console.log('[PhotoLibrary] Using local smart collections (web or no backend)');
+      setSmartCollections(getLocalSmartCollections());
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingCollections(true);
+
+    const videoMeta = photos.map(p => ({
+      id: p.id,
+      date: p.date,
+      duration: p.duration,
+      location: p.location,
+      type: p.type,
+    }));
+
+    console.log('[PhotoLibrary] Fetching smart collections from API for', videoMeta.length, 'items');
+
+    fetchSmartCollections(videoMeta)
+      .then((result) => {
+        if (cancelled) return;
+
+        if (result.collections.length > 0) {
+          console.log('[PhotoLibrary] API returned', result.collections.length, 'smart collections');
+          const photoMap = new Map(photos.map(p => [p.id, p]));
+          const mapped: SmartCollection[] = result.collections.map((col, idx) => {
+            const matchedPhotos = col.videoIds
+              .map(vid => photoMap.get(vid))
+              .filter((p): p is PhotoItem => p !== undefined);
+            return {
+              id: `api-${idx}-${col.name.replace(/\s+/g, '-').toLowerCase()}`,
+              name: col.name,
+              icon: col.icon,
+              photos: matchedPhotos.slice(0, 6),
+            };
+          }).filter(c => c.photos.length > 0);
+
+          if (mapped.length > 0) {
+            setSmartCollections(mapped);
+          } else {
+            console.log('[PhotoLibrary] API collections had no matching photos, using local fallback');
+            setSmartCollections(getLocalSmartCollections());
+          }
+        } else {
+          console.log('[PhotoLibrary] API returned empty, using local fallback');
+          setSmartCollections(getLocalSmartCollections());
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('[PhotoLibrary] Smart collections API error, using local fallback:', error);
+        setSmartCollections(getLocalSmartCollections());
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingCollections(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [photos, isWeb, getLocalSmartCollections]);
 
   return useMemo(() => ({
     permissionStatus,
@@ -322,7 +398,8 @@ export const [PhotoLibraryProvider, usePhotoLibrary] = createContextHook(() => {
     requestPermission,
     loadInitialPhotos,
     loadMore,
-    getSmartCollections,
+    smartCollections,
+    isLoadingCollections,
   }), [
     permissionStatus,
     photos,
@@ -333,6 +410,7 @@ export const [PhotoLibraryProvider, usePhotoLibrary] = createContextHook(() => {
     requestPermission,
     loadInitialPhotos,
     loadMore,
-    getSmartCollections,
+    smartCollections,
+    isLoadingCollections,
   ]);
 });
