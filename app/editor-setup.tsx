@@ -10,7 +10,6 @@ import {
   TextInput,
   FlatList,
   Platform,
-  // Switch, // TODO: Re-enable when AI photo motion toggle is added back
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
@@ -255,8 +254,6 @@ export default function EditorSetupScreen() {
   const [style, setStyle] = useState<MontageStyle>(settings.defaultStyle);
   const [duration, setDuration] = useState<TargetDuration>(30);
   const [musicBrowserVisible, setMusicBrowserVisible] = useState<boolean>(false);
-  // TODO: Re-enable AI photo-to-video enhancement when ready
-  // const [aiEnhance, setAiEnhance] = useState<boolean>(settings.aiEnhancementDefault);
   const aiEnhance = false;
   const buttonScale = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -457,34 +454,6 @@ export default function EditorSetupScreen() {
           })}
         </View>
         <Text style={styles.durationNote}>Clips will be trimmed and synced to fit your target duration</Text>
-
-        {/* TODO: Re-enable AI photo motion when image-to-video is supported
-        <Text style={styles.sectionLabel}>PHOTO MOTION</Text>
-        <View style={styles.aiCard}>
-          <View style={styles.aiCardLeft}>
-            <Wand2 size={20} color={Colors.dark.accent} strokeWidth={1.5} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.aiTitle}>Bring photos to life with AI</Text>
-            <Text style={styles.aiSubtitle}>
-              {aiEnhance
-                ? 'Uses AI to add subtle motion to still photos — gentle parallax, slow zooms, and natural movement. Takes ~2-3 min.'
-                : 'Still photos will use a smooth Ken Burns pan-and-zoom effect (instant, no AI needed)'}
-            </Text>
-          </View>
-          <Switch
-            value={aiEnhance}
-            onValueChange={(value) => {
-              if (Platform.OS !== 'web') {
-                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }
-              setAiEnhance(value);
-            }}
-            trackColor={{ false: Colors.dark.surfaceLight, true: Colors.dark.accentDark }}
-            thumbColor={aiEnhance ? Colors.dark.accent : Colors.dark.textTertiary}
-          />
-        </View>
-        */}
 
         <Text style={styles.sectionLabel}>BEAT SYNC</Text>
         <View style={styles.aiCard}>
@@ -702,11 +671,6 @@ const styles = StyleSheet.create({
     color: Colors.dark.secondary,
     fontWeight: '600' as const,
     marginTop: 6,
-  },
-  kenBurnsNote: {
-    fontSize: 12,
-    color: Colors.dark.textTertiary,
-    marginBottom: 24,
   },
   musicModeRow: {
     flexDirection: 'row',
